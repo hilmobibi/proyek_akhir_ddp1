@@ -483,7 +483,7 @@ def add_menu(
     name: str,
     price: int,
     description: str,
-    emoji: str = "🍽️",
+    emoji: str = "",
     is_available: bool = True,
 ) -> dict[str, Any]:
     """Menambahkan menu baru ke daftar menu milik suatu kios.
@@ -496,7 +496,7 @@ def add_menu(
         raise ValueError(f"Kios dengan id '{tenant_id}' tidak ditemukan.")
 
     clean_name, parsed_price = _validate_menu_fields(name, price)
-    clean_emoji = emoji.strip() or "🍽️"
+    clean_emoji = emoji.strip()
     new_menu: dict[str, Any] = {
         "id": f"m-{uuid.uuid4().hex[:6]}",
         "tenant_id": tenant_id,
@@ -524,7 +524,7 @@ def update_menu(
     ``supabase.table("menus").update(payload).eq("id", menu_id).execute()``
     """
     clean_name, parsed_price = _validate_menu_fields(name, price)
-    clean_emoji = emoji.strip() or "🍽️"
+    clean_emoji = emoji.strip()
 
     init_db()
     for menu in _get_store()["db_menus"]:

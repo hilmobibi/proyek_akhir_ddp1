@@ -79,7 +79,7 @@ def _handle_sso_callback_hook() -> None:
 
 def _render_login_page() -> None:
     """Merender halaman login 2 role (Pembeli Mahasiswa & Penjual Kios Kantin)."""
-    st.title("🍽️ GoFood Kancil — Queue Kantin Online")
+    st.title("GoFood Kancil — Queue Kantin Online")
     st.caption("Pesan makanan & minuman kantin satu fakultas tanpa antre lama.")
 
     tenants = db_service.get_tenants()
@@ -89,7 +89,7 @@ def _render_login_page() -> None:
     with col_left:
         with st.container(border=True):
             tab_buyer_login, tab_seller_login = st.tabs(
-                ["🎓 Pembeli (Mahasiswa)", "🍳 Penjual (Kios Kantin)"]
+                ["Pembeli (Mahasiswa)", "Penjual (Kios Kantin)"]
             )
 
             with tab_buyer_login:
@@ -141,10 +141,7 @@ def _render_login_page() -> None:
                         selected_tid = st.selectbox(
                             "Pilih Kios Kantin",
                             options=[t["id"] for t in tenants],
-                            format_func=lambda tid: (
-                                f"{tenant_map[tid].get('emoji', '🏪')} "
-                                f"{tenant_map[tid]['name']}"
-                            ),
+                            format_func=lambda tid: tenant_map[tid]["name"],
                         )
                         pin_input = st.text_input(
                             "PIN Kios", type="password", placeholder="Masukkan PIN (1234)"
@@ -179,7 +176,7 @@ def _render_login_page() -> None:
 
     with col_right:
         with st.container(border=True):
-            st.markdown("#### ✨ Alur GoFood Kancil")
+            st.markdown("#### Alur GoFood Kancil")
             st.markdown(
                 "**Untuk Mahasiswa (Pembeli):**\n"
                 "1. Pilih kios & menu di **Etalase Kantin**.\n"
@@ -199,12 +196,12 @@ def _render_sidebar(user: dict[str, Any]) -> None:
     tenant_map = {t["id"]: t for t in tenants}
 
     with st.sidebar:
-        st.markdown("## 🍽️ GoFood Kancil")
+        st.markdown("## GoFood Kancil")
         st.caption("Queue Kantin Online — Fakultas")
         st.divider()
 
         if user["role"] == "buyer":
-            st.markdown("### 🎓 Profil Pembeli")
+            st.markdown("### Profil Pembeli")
             st.markdown(f"**Nama:** {user['name']}")
             st.markdown(f"**NPM:** `{user['npm']}`")
             if st.button("🚪 Keluar (Logout)", use_container_width=True):
@@ -221,7 +218,7 @@ def _render_sidebar(user: dict[str, Any]) -> None:
                 int(item["price"]) * int(item["qty"])
                 for item in cart["items"].values()
             )
-            st.markdown("### 🛒 Ringkasan Keranjang")
+            st.markdown("### Ringkasan Keranjang")
             if cart_qty > 0 and cart["tenant_id"]:
                 active_tenant = tenant_map.get(cart["tenant_id"])
                 tenant_name = active_tenant["name"] if active_tenant else "-"
@@ -233,7 +230,7 @@ def _render_sidebar(user: dict[str, Any]) -> None:
                 st.caption("Keranjang masih kosong.")
 
             st.divider()
-            st.markdown("### 🔄 Pindah Role (Demo)")
+            st.markdown("### Pindah Role (Demo)")
             st.caption(
                 "Beralih ke tampilan Penjual untuk memproses pesanan yang baru kamu buat."
             )
@@ -254,9 +251,9 @@ def _render_sidebar(user: dict[str, Any]) -> None:
 
         else:
             current_tenant = tenant_map.get(user.get("tenant_id", ""))
-            st.markdown("### 🍳 Profil Penjual")
+            st.markdown("### Profil Penjual")
             if current_tenant:
-                status_text = "🟢 Buka" if current_tenant["is_open"] else "🔴 Tutup"
+                status_text = "Buka" if current_tenant["is_open"] else "Tutup"
                 st.markdown(f"**Kios:** {current_tenant['name']}")
                 st.markdown(f"**Status:** {status_text}")
             if st.button("🚪 Keluar (Logout)", use_container_width=True):
@@ -265,7 +262,7 @@ def _render_sidebar(user: dict[str, Any]) -> None:
                 st.rerun()
 
             st.divider()
-            st.markdown("### 🏪 Ganti Kios (Demo)")
+            st.markdown("### Ganti Kios (Demo)")
             if tenants:
                 current_idx = next(
                     (
@@ -291,7 +288,7 @@ def _render_sidebar(user: dict[str, Any]) -> None:
                     st.rerun()
 
             st.divider()
-            st.markdown("### 🔄 Pindah Role (Demo)")
+            st.markdown("### Pindah Role (Demo)")
             if st.button(
                 "🎓 Kembali ke Mode Pembeli (Demo)",
                 key="switch_to_buyer_btn",
@@ -306,7 +303,6 @@ def main() -> None:
     """Menjalankan aplikasi utama GoFood Kancil."""
     st.set_page_config(
         page_title="GoFood Kancil - Queue Kantin Online",
-        page_icon="🍽️",
         layout="wide",
     )
     _init_session_state()
@@ -319,10 +315,10 @@ def main() -> None:
 
     _render_sidebar(user)
     if user["role"] == "seller":
-        st.title("🍳 GoFood Kancil — Dashboard Penjual")
+        st.title("GoFood Kancil — Dashboard Penjual")
         seller_view.render_seller_view(user)
     else:
-        st.title("🍽️ GoFood Kancil — Kantin Fakultas")
+        st.title("GoFood Kancil — Kantin Fakultas")
         buyer_view.render_buyer_view(user)
 
 

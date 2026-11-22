@@ -33,7 +33,6 @@ def _add_to_cart(tenant_id: str, menu: dict[str, Any]) -> None:
             "menu_id": menu_id,
             "name": menu["name"],
             "price": int(menu["price"]),
-            "emoji": menu.get("emoji", "🍽️"),
             "qty": 1,
         }
 
@@ -57,7 +56,7 @@ def _change_cart_qty(menu_id: str, delta: int) -> None:
 
 def _render_tenant_grid(tenants: list[dict[str, Any]]) -> None:
     """Merender Tahap A: Grid pilihan kios kantin."""
-    st.markdown("### 🏪 Pilih Kios Kantin")
+    st.markdown("### Pilih Kios Kantin")
     st.caption("Klik salah satu kios untuk melihat daftar menu dan mulai memesan.")
 
     num_cols = min(3, len(tenants))
@@ -66,13 +65,14 @@ def _render_tenant_grid(tenants: list[dict[str, Any]]) -> None:
         menus = db_service.get_menus_by_tenant(tenant["id"])
         avail_count = sum(1 for m in menus if m["is_available"])
         total_count = len(menus)
-        emoji = tenant.get("emoji", "🏪")
-        status_badge = "🟢 Buka" if tenant["is_open"] else "🔴 Tutup"
+        status_badge = "Buka" if tenant["is_open"] else "Tutup"
 
         with cols[idx % num_cols]:
             with st.container(border=True):
-                st.markdown(f"#### {emoji} {tenant['name']}")
-                st.markdown(f"**{status_badge}** · 🍽️ {avail_count}/{total_count} menu tersedia")
+                st.markdown(f"#### {tenant['name']}")
+                st.markdown(
+                    f"**{status_badge}** · {avail_count}/{total_count} menu tersedia"
+                )
                 st.caption(tenant["description"])
                 if st.button(
                     "🍽️ Lihat Menu",
@@ -97,13 +97,16 @@ def _render_menu_grid(tenants: list[dict[str, Any]], active_tenant_id: str) -> N
         st.session_state["active_storefront_tenant_id"] = None
         st.rerun()
 
-    emoji_tenant = tenant.get("emoji", "🏪")
-    status_badge = "🟢 **Kios Sedang Buka**" if tenant["is_open"] else "🔴 **Kios Sedang Tutup**"
-    st.markdown(f"### {emoji_tenant} {tenant['name']}  |  {status_badge}")
+    status_badge = (
+        "**Kios Sedang Buka**" if tenant["is_open"] else "**Kios Sedang Tutup**"
+    )
+    st.markdown(f"### {tenant['name']}  |  {status_badge}")
     st.caption(tenant["description"])
 
     if not tenant["is_open"]:
-        st.info("Kios ini sedang tutup sementara. Kamu tetap bisa melihat menu, tetapi pemesanan dinonaktifkan.")
+        st.info(
+            "Kios ini sedang tutup sementara. Kamu tetap bisa melihat menu, tetapi pemesanan dinonaktifkan."
+        )
 
     cart = st.session_state["cart"]
     cart_locked_other_tenant = (
@@ -115,7 +118,7 @@ def _render_menu_grid(tenants: list[dict[str, Any]], active_tenant_id: str) -> N
         active_tenant = tenant_map.get(cart["tenant_id"])
         active_name = active_tenant["name"] if active_tenant else "kios lain"
         st.warning(
-            f"⚠️ Keranjangmu sedang berisi menu dari **{active_name}**. "
+            f"Keranjangmu sedang berisi menu dari **{active_name}**. "
             "Karena tiap kios memiliki QRIS pembayaran berbeda, checkout dilakukan per 1 kios."
         )
         if st.button(
@@ -135,11 +138,10 @@ def _render_menu_grid(tenants: list[dict[str, Any]], active_tenant_id: str) -> N
     for idx, menu in enumerate(menus):
         with cols[idx % 2]:
             with st.container(border=True):
-                emoji = menu.get("emoji", "🍽️")
                 in_stock = bool(menu["is_available"])
-                stock_label = "✅ Tersedia" if in_stock else "❌ Habis"
+                stock_label = "Tersedia" if in_stock else "Habis"
 
-                st.markdown(f"#### {emoji} {menu['name']}")
+                st.markdown(f"#### {menu['name']}")
                 st.caption(menu.get("description", ""))
                 st.markdown(f"**{format_rupiah(int(menu['price']))}** · {stock_label}")
 
@@ -149,7 +151,11 @@ def _render_menu_grid(tenants: list[dict[str, Any]], active_tenant_id: str) -> N
                     if current_qty > 0
                     else "➕ Tambah ke Keranjang"
                 )
-                disabled = (not tenant["is_open"]) or (not in_stock) or cart_locked_other_tenant
+                disabled = (
+                    (not tenant["is_open"])
+                    or (not in_stock)
+                    or cart_locked_other_tenant
+                )
                 if st.button(
                     btn_label,
                     key=f"add_{tenant['id']}_{menu['id']}",
@@ -180,7 +186,7 @@ def _render_checkout_tab(user: dict[str, Any]) -> None:
 
     if not items_dict or cart["tenant_id"] is None:
         st.info(
-            "Keranjang belanjamu masih kosong. Silakan pilih menu di tab **🏪 Etalase Kantin**."
+            "Keranjang belanjamu masih kosong. Silakan pilih menu di tab **Etalase Kantin**."
         )
         return
 
@@ -198,10 +204,10 @@ def _render_checkout_tab(user: dict[str, Any]) -> None:
             _reset_cart()
             st.rerun()
 
-    st.info("📍 **Metode Pengambilan:** Ambil langsung di konter kios")
+    st.info("**Metode Pengambilan:** Ambil langsung di konter kios")
     if not tenant["is_open"]:
         st.warning(
-            "🔴 **Kios baru saja ditutup oleh penjual.** "
+            "**Kios baru saja ditutup oleh penjual.** "
             "Pesanan tidak dapat dikirim sebelum kios buka kembali."
         )
 
@@ -214,7 +220,7 @@ def _render_checkout_tab(user: dict[str, Any]) -> None:
         with st.container(border=True):
             c_info, c_dec, c_qty, c_inc, c_del = st.columns([4, 1, 1, 1, 1])
             with c_info:
-                st.markdown(f"**{item.get('emoji', '🍽️')} {item['name']}**")
+                st.markdown(f"**{item['name']}**")
                 st.caption(
                     f"{format_rupiah(int(item['price']))} × {qty} = **{format_rupiah(subtotal)}**"
                 )
@@ -237,7 +243,7 @@ def _render_checkout_tab(user: dict[str, Any]) -> None:
                     st.rerun()
 
     notes = st.text_area(
-        "📝 Catatan Pesanan (Opsional)",
+        "Catatan Pesanan (Opsional)",
         placeholder="Contoh: Tidak pedas, sambal pisah, es sedikit...",
         key="checkout_notes",
     )
@@ -255,15 +261,15 @@ def _render_checkout_tab(user: dict[str, Any]) -> None:
     with upload_col:
         st.markdown("#### 2. Upload Bukti Pembayaran (Wajib)")
         uploaded_file = st.file_uploader(
-            "📤 Upload Bukti Pembayaran QRIS (PNG/JPG - Wajib)",
+            "Upload Bukti Pembayaran QRIS (PNG/JPG - Wajib)",
             type=["png", "jpg", "jpeg"],
             key="payment_proof_uploader",
         )
         if uploaded_file is not None:
-            with st.expander("👁️ Preview Bukti Pembayaran", expanded=True):
+            with st.expander("Preview Bukti Pembayaran", expanded=True):
                 st.image(uploaded_file, caption=uploaded_file.name, width=260)
         else:
-            st.caption("⚠️ Tombol pesan aktif setelah bukti pembayaran QRIS diunggah.")
+            st.caption("Tombol pesan aktif setelah bukti pembayaran QRIS diunggah.")
 
         submit_disabled = (uploaded_file is None) or (not tenant["is_open"])
         if st.button(
@@ -295,7 +301,7 @@ def _render_live_queue_tab(user: dict[str, Any]) -> None:
     """Merender Tab 3: Pelacakan Live Queue & verifikasi pembayaran milik pembeli."""
     top_col, refresh_col = st.columns([4, 1])
     with top_col:
-        st.markdown("### ⏳ Status Antrean Pesananmu")
+        st.markdown("### Status Antrean Pesananmu")
     with refresh_col:
         if st.button("🔄 Refresh Status", use_container_width=True):
             st.rerun()
@@ -316,27 +322,27 @@ def _render_live_queue_tab(user: dict[str, Any]) -> None:
             with head_right:
                 st.markdown(f"#### {order['tenant_name']}")
                 st.caption(
-                    f"🕒 {order['created_at']}  |  💰 Total: **{format_rupiah(int(order['total_price']))}**  |  📍 {order['pickup_method']}"
+                    f"{order['created_at']}  |  Total: **{format_rupiah(int(order['total_price']))}**  |  {order['pickup_method']}"
                 )
                 for item in order["items"]:
                     st.markdown(
-                        f"- {item.get('emoji', '🍽️')} **{item['name']}** × {item['qty']} "
+                        f"- **{item['name']}** × {item['qty']} "
                         f"({format_rupiah(int(item['price']) * int(item['qty']))})"
                     )
                 if order["notes"]:
-                    st.caption(f"📝 Catatan: *{order['notes']}*")
+                    st.caption(f"Catatan: *{order['notes']}*")
 
             status = order["status"]
             if status == db_service.STATUS_READY:
                 st.progress(100)
                 st.success(
-                    f"🔔 **Status (100%): {db_service.STATUS_READY}!** — "
+                    f"**Status (100%): {db_service.STATUS_READY}!** — "
                     f"Silakan ambil pesananmu langsung di konter kios dengan menunjukkan nomor antrean **#{order['queue_number']}**."
                 )
             elif status == db_service.STATUS_PREPARING:
                 st.progress(50)
                 st.info(
-                    f"🍳 **Status (50%): {db_service.STATUS_PREPARING}** — "
+                    f"**Status (50%): {db_service.STATUS_PREPARING}** — "
                     "Pembayaran telah dikonfirmasi! Kios sedang menyiapkan makanan/minumanmu."
                 )
             elif status == db_service.STATUS_REJECTED:
@@ -344,17 +350,17 @@ def _render_live_queue_tab(user: dict[str, Any]) -> None:
                 reason = order.get("rejection_reason", "").strip()
                 reason_text = f" Alasan: *{reason}*" if reason else ""
                 st.error(
-                    f"❌ **Status: {db_service.STATUS_REJECTED}** — "
+                    f"**Status: {db_service.STATUS_REJECTED}** — "
                     f"Bukti pembayaran QRIS kamu ditolak oleh penjual.{reason_text}"
                 )
             else:
                 st.progress(0)
                 st.warning(
-                    f"🕒 **Status (0%): {db_service.STATUS_PENDING_PAYMENT}** — "
+                    f"**Status (0%): {db_service.STATUS_PENDING_PAYMENT}** — "
                     "Penjual sedang memeriksa bukti pembayaran QRIS yang kamu unggah."
                 )
 
-            with st.expander("🧾 Lihat Bukti Pembayaran QRIS"):
+            with st.expander("Lihat Bukti Pembayaran QRIS"):
                 st.image(
                     order["payment_proof_bytes"],
                     caption=f"File: {order['payment_filename']}",
@@ -367,9 +373,9 @@ def render_buyer_view(user: dict[str, Any]) -> None:
     last_order = st.session_state.pop("last_created_order", None)
     if last_order:
         st.success(
-            f"✅ Pesanan **#{last_order['queue_number']}** di **{last_order['tenant_name']}** "
+            f"Pesanan **#{last_order['queue_number']}** di **{last_order['tenant_name']}** "
             "berhasil dikirim dan sedang **Menunggu Konfirmasi Pembayaran** oleh penjual. "
-            "Pantau progresnya di tab **⏳ Live Queue & Tracking**."
+            "Pantau progresnya di tab **Live Queue & Tracking**."
         )
 
     cart_count = sum(
@@ -377,15 +383,19 @@ def render_buyer_view(user: dict[str, Any]) -> None:
     )
     active_orders_count = len(db_service.get_buyer_orders(user["id"]))
 
-    cart_label = f"🛒 Keranjang & Checkout ({cart_count})" if cart_count else "🛒 Keranjang & Checkout"
+    cart_label = (
+        f"Keranjang & Checkout ({cart_count})"
+        if cart_count
+        else "Keranjang & Checkout"
+    )
     queue_label = (
-        f"⏳ Live Queue & Tracking ({active_orders_count})"
+        f"Live Queue & Tracking ({active_orders_count})"
         if active_orders_count
-        else "⏳ Live Queue & Tracking"
+        else "Live Queue & Tracking"
     )
 
     tab_store, tab_cart, tab_queue = st.tabs(
-        ["🏪 Etalase Kantin", cart_label, queue_label]
+        ["Etalase Kantin", cart_label, queue_label]
     )
 
     tenants = db_service.get_tenants()
