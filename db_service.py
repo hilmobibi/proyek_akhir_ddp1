@@ -1,4 +1,4 @@
-"""Lapisan layanan data untuk Quentin (Queue Kantin Online).
+"""Lapisan layanan data untuk GoFood Kancil (Queue Kantin Online).
 
 Saat ini menggunakan penyimpanan sementara (``st.session_state`` saat berjalan di
 Streamlit, atau fallback dictionary saat dijalankan terpisah) agar MVP Role
@@ -108,7 +108,7 @@ def generate_qris_svg_data_uri(
         f'<rect x="2" y="32" width="256" height="14" fill="{safe_color}"/>'
         '<text x="130" y="29" text-anchor="middle" fill="#FFFFFF" '
         'font-family="Arial, sans-serif" font-size="16" font-weight="bold">'
-        "QRIS PEMBAYARAN KANTIN</text>"
+        "QRIS GOFOOD KANCIL</text>"
         '<text x="130" y="61" text-anchor="middle" fill="#111827" '
         'font-family="Arial, sans-serif" font-size="12" font-weight="bold">'
         f"{safe_name}</text>"
@@ -150,6 +150,8 @@ def init_db() -> None:
             {
                 "id": "t1",
                 "name": "Kantin Ayam Geprek Mas Budi",
+                "emoji": "🍗",
+                "pin": "1234",
                 "description": "Spesialis ayam geprek sambal bawang, tahu tempe, dan es segar.",
                 "is_open": True,
                 "queue_prefix": "A",
@@ -161,6 +163,8 @@ def init_db() -> None:
             {
                 "id": "t2",
                 "name": "Soto & Bakso Bu Sari",
+                "emoji": "🍲",
+                "pin": "1234",
                 "description": "Soto ayam bening, bakso urat, dan minuman hangat/dingin.",
                 "is_open": True,
                 "queue_prefix": "B",
@@ -172,6 +176,8 @@ def init_db() -> None:
             {
                 "id": "t3",
                 "name": "Mie Ayam & Nasgor Pakde",
+                "emoji": "🍜",
+                "pin": "1234",
                 "description": "Mie ayam jamur, nasi goreng kampung, dan kwetiau goreng.",
                 "is_open": False,
                 "queue_prefix": "C",
@@ -431,3 +437,131 @@ def update_order_status(order_id: str, new_status: str) -> bool:
             order["status"] = new_status
             return True
     return False
+
+
+def toggle_tenant_open(tenant_id: str, is_open: bool) -> bool:
+    """Mengubah status buka/tutup kios kantin.
+
+    Supabase equivalent:
+    ``supabase.table("tenants").update({"is_open": is_open}).eq("id", tenant_id).execute()``
+    """
+    init_db()
+    for tenant in _get_store()["db_tenants"]:
+        if tenant["id"] == tenant_id:
+            tenant["is_open"] = bool(is_open)
+            return True
+    return False
+
+
+def _validate_menu_fields(name: str, price: int) -> tuple[str, int]:
+    """Memvalidasi nama dan harga menu agar seragam saat tambah maupun edit."""
+    clean_name = name.strip()
+    if not clean_name:
+        raise ValueError("Nama menu tidak boleh kosong.")
+    parsed_price = int(price)
+    if parsed_price <= 0:
+        raise ValueError("Harga menu harus lebih dari 0.")
+    return clean_name, parsed_price
+
+
+def add_menu(
+    tenant_id: str,
+    name: str,
+    price: int,
+    description: str,
+    emoji: str = "🍽️",
+    is_available: bool = True,
+) -> dict[str, Any]:
+    """Menambahkan menu baru ke daftar menu milik suatu kios.
+
+    Supabase equivalent:
+    ``supabase.table("menus").insert(menu_payload).execute()``
+    """
+    init_db()
+    if get_tenant_by_id(tenant_id) is None:
+        raise ValueError(f"Kios dengan id '{tenant_id}' tidak ditemukan.")
+
+    clean_name, parsed_price = _validate_menu_fields(name, price)
+    clean_emoji = emoji.strip() or "🍽️"
+    new_menu: dict[str, Any] = {
+        "id": f"m-{uuid.uuid4().hex[:6]}",
+        "tenant_id": tenant_id,
+        "name": clean_name,
+        "price": parsed_price,
+        "emoji": clean_emoji,
+        "description": description.strip(),
+        "is_available": bool(is_available),
+    }
+    _get_store()["db_menus"].append(new_menu)
+    return new_menu
+
+
+def update_menu(
+    menu_id: str,
+    name: str,
+    price: int,
+    description: str,
+    emoji: str,
+    is_available: bool,
+) -> bool:
+    """Memperbarui detail menu yang sudah ada.
+
+    Supabase equivalent:
+    ``supabase.table("menus").update(payload).eq("id", menu_id).execute()``
+    """
+    clean_name, parsed_price = _validate_menu_fields(name, price)
+    clean_emoji = emoji.strip() or "🍽️"
+
+    init_db()
+    for menu in _get_store()["db_menus"]:
+        if menu["id"] == menu_id:
+            menu["name"] = clean_name
+            menu["price"] = parsed_price
+            menu["description"] = description.strip()
+            menu["emoji"] = clean_emoji
+            menu["is_available"] = bool(is_available)
+            return True
+    return False
+
+
+def toggle_menu_availability(menu_id: str, is_available: bool) -> bool:
+    """Mengubah status ketersediaan stok menu (Tersedia / Habis).
+
+    Supabase equivalent:
+    ``supabase.table("menus").update({"is_available": is_available}).eq("id", menu_id).execute()``
+    """
+    init_db()
+    for menu in _get_store()["db_menus"]:
+        if menu["id"] == menu_id:
+            menu["is_available"] = bool(is_available)
+            return True
+    return False
+
+
+def delete_menu(menu_id: str) -> bool:
+    """Menghapus menu dari kios berdasarkan ``menu_id``.
+
+    Supabase equivalent:
+    ``supabase.table("menus").delete().eq("id", menu_id).execute()``
+    """
+    init_db()
+    menus = _get_store()["db_menus"]
+    for idx, menu in enumerate(menus):
+        if menu["id"] == menu_id:
+            del menus[idx]
+            return True
+    return False
+
+
+def get_tenant_orders(tenant_id: str) -> list[dict[str, Any]]:
+    """Mengambil antrean pesanan milik satu kios secara berurutan (FIFO).
+
+    Pesanan yang masuk lebih awal tampil di paling atas untuk diproses duluan.
+
+    Supabase equivalent:
+    ``supabase.table("orders").select("*").eq("tenant_id", tenant_id).order("created_at", desc=False).execute().data``
+    """
+    init_db()
+    return [
+        o for o in _get_store()["db_orders"] if o["tenant_id"] == tenant_id
+    ]

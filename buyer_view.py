@@ -1,4 +1,4 @@
-"""Tampilan UI Role Pembeli (Mahasiswa) untuk Quentin (Queue Kantin Online)."""
+"""Tampilan UI Role Pembeli (Mahasiswa) untuk GoFood Kancil (Queue Kantin Online)."""
 
 from __future__ import annotations
 
@@ -55,33 +55,57 @@ def _change_cart_qty(menu_id: str, delta: int) -> None:
         cart["tenant_id"] = None
 
 
-def _render_storefront_tab(tenants: list[dict[str, Any]]) -> None:
-    """Merender Tab 1: Etalase Kantin (pilihan kios dan daftar menu)."""
-    if not tenants:
-        st.warning("Belum ada kios kantin yang terdaftar.")
+def _render_tenant_grid(tenants: list[dict[str, Any]]) -> None:
+    """Merender Tahap A: Grid pilihan kios kantin."""
+    st.markdown("### 🏪 Pilih Kios Kantin")
+    st.caption("Klik salah satu kios untuk melihat daftar menu dan mulai memesan.")
+
+    num_cols = min(3, len(tenants))
+    cols = st.columns(num_cols)
+    for idx, tenant in enumerate(tenants):
+        menus = db_service.get_menus_by_tenant(tenant["id"])
+        avail_count = sum(1 for m in menus if m["is_available"])
+        total_count = len(menus)
+        emoji = tenant.get("emoji", "🏪")
+        status_badge = "🟢 Buka" if tenant["is_open"] else "🔴 Tutup"
+
+        with cols[idx % num_cols]:
+            with st.container(border=True):
+                st.markdown(f"#### {emoji} {tenant['name']}")
+                st.markdown(f"**{status_badge}** · 🍽️ {avail_count}/{total_count} menu tersedia")
+                st.caption(tenant["description"])
+                if st.button(
+                    "🍽️ Lihat Menu",
+                    key=f"open_tenant_{tenant['id']}",
+                    type="primary" if tenant["is_open"] else "secondary",
+                    use_container_width=True,
+                ):
+                    st.session_state["active_storefront_tenant_id"] = tenant["id"]
+                    st.rerun()
+
+
+def _render_menu_grid(tenants: list[dict[str, Any]], active_tenant_id: str) -> None:
+    """Merender Tahap B: Grid pilihan menu milik kios yang dipilih."""
+    tenant_map = {t["id"]: t for t in tenants}
+    tenant = tenant_map.get(active_tenant_id)
+    if tenant is None:
+        st.session_state["active_storefront_tenant_id"] = None
+        st.rerun()
         return
 
-    cart = st.session_state["cart"]
-    tenant_map = {t["id"]: t for t in tenants}
+    if st.button("⬅️ Kembali ke Daftar Kios", key="back_to_tenant_grid"):
+        st.session_state["active_storefront_tenant_id"] = None
+        st.rerun()
 
-    selected_tenant_id = st.selectbox(
-        "Pilih Kios Kantin:",
-        options=[t["id"] for t in tenants],
-        format_func=lambda tid: (
-            f"{'🟢 Buka' if tenant_map[tid]['is_open'] else '🔴 Tutup'} — "
-            f"{tenant_map[tid]['name']}"
-        ),
-        key="selected_tenant_id",
-    )
-    tenant = tenant_map[selected_tenant_id]
-
+    emoji_tenant = tenant.get("emoji", "🏪")
     status_badge = "🟢 **Kios Sedang Buka**" if tenant["is_open"] else "🔴 **Kios Sedang Tutup**"
-    st.markdown(f"### {tenant['name']}  |  {status_badge}")
+    st.markdown(f"### {emoji_tenant} {tenant['name']}  |  {status_badge}")
     st.caption(tenant["description"])
 
     if not tenant["is_open"]:
         st.info("Kios ini sedang tutup sementara. Kamu tetap bisa melihat menu, tetapi pemesanan dinonaktifkan.")
 
+    cart = st.session_state["cart"]
     cart_locked_other_tenant = (
         cart["tenant_id"] is not None
         and cart["tenant_id"] != tenant["id"]
@@ -136,6 +160,19 @@ def _render_storefront_tab(tenants: list[dict[str, Any]]) -> None:
                     st.rerun()
 
 
+def _render_storefront_tab(tenants: list[dict[str, Any]]) -> None:
+    """Merender Tab 1: Etalase Kantin 2 tahap (Grid Kios -> Grid Menu)."""
+    if not tenants:
+        st.warning("Belum ada kios kantin yang terdaftar.")
+        return
+
+    active_tenant_id = st.session_state.get("active_storefront_tenant_id")
+    if active_tenant_id is None:
+        _render_tenant_grid(tenants)
+    else:
+        _render_menu_grid(tenants, active_tenant_id)
+
+
 def _render_checkout_tab(user: dict[str, Any]) -> None:
     """Merender Tab 2: Keranjang, QRIS khusus kios, & upload bukti bayar wajib."""
     cart = st.session_state["cart"]
@@ -162,6 +199,11 @@ def _render_checkout_tab(user: dict[str, Any]) -> None:
             st.rerun()
 
     st.info("📍 **Metode Pengambilan:** Ambil langsung di konter kios")
+    if not tenant["is_open"]:
+        st.warning(
+            "🔴 **Kios baru saja ditutup oleh penjual.** "
+            "Pesanan tidak dapat dikirim sebelum kios buka kembali."
+        )
 
     total_price = 0
     for menu_id, item in list(items_dict.items()):
@@ -223,7 +265,7 @@ def _render_checkout_tab(user: dict[str, Any]) -> None:
         else:
             st.caption("⚠️ Tombol pesan aktif setelah bukti pembayaran QRIS diunggah.")
 
-        submit_disabled = uploaded_file is None
+        submit_disabled = (uploaded_file is None) or (not tenant["is_open"])
         if st.button(
             "🚀 Kirim Bukti & Buat Pesanan",
             type="primary",

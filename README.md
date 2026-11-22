@@ -1,8 +1,13 @@
-# Tugas Akhir DDP1 Quentin (queue kantin online)
-### angota kelompok:
+# Tugas Akhir DDP1 GoFood Kancil (Queue Kantin Online)
+### Anggota Kelompok:
 - Azzam
 - Hilmo
 - Rasya
 
-## ide
-Karena jam makan siang terbatas dan hactic bgt, alangkah baiknya kalau bisa memesan makanan kantin dari perangkat pribadi. Itulah solusi yang sedang kami usahakan.
+## Ide
+Karena jam makan siang terbatas dan hectic banget, alangkah baiknya kalau bisa memesan makanan kantin dari perangkat pribadi. Itulah solusi yang sedang kami usahakan.
+
+## Cara Menjalankan Aplikasi
+```powershell
+.\.venv\Scripts\streamlit run main.py
+```
