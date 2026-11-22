@@ -32,12 +32,15 @@ def _init_session_state() -> None:
         st.session_state["cart"] = {"tenant_id": None, "items": {}}
     if "active_storefront_tenant_id" not in st.session_state:
         st.session_state["active_storefront_tenant_id"] = None
+    if "seller_pending_action" not in st.session_state:
+        st.session_state["seller_pending_action"] = None
 
 
 def _set_buyer_session(buyer: dict[str, Any]) -> None:
     """Menyimpan sesi login Pembeli sekaligus mengingat profilnya untuk pindah role."""
     st.session_state["user"] = buyer
     st.session_state["last_buyer_user"] = buyer
+    st.session_state["seller_pending_action"] = None
 
 
 def _set_seller_session(tenant: dict[str, Any]) -> None:
@@ -48,6 +51,7 @@ def _set_seller_session(tenant: dict[str, Any]) -> None:
         "tenant_id": tenant["id"],
         "role": "seller",
     }
+    st.session_state["seller_pending_action"] = None
 
 
 def _handle_sso_callback_hook() -> None:
@@ -180,12 +184,12 @@ def _render_login_page() -> None:
                 "**Untuk Mahasiswa (Pembeli):**\n"
                 "1. Pilih kios & menu di **Etalase Kantin**.\n"
                 "2. Checkout **1 kios** per pesanan & scan **QRIS khusus kios**.\n"
-                "3. **Upload bukti pembayaran** (wajib) untuk masuk antrean.\n"
-                "4. Pantau **Live Queue** & ambil pesanan di konter kios.\n\n"
+                "3. **Upload bukti pembayaran** (wajib) untuk masuk antrean (`0%`).\n"
+                "4. Pantau **Live Queue** (`0% → 50% → 100%`) & ambil di konter kios.\n\n"
                 "**Untuk Penjual Kios:**\n"
                 "1. Kelola menu, harga, stok, & status **Buka/Tutup** kios.\n"
-                "2. Pantau **Antrean Pesanan Masuk** beserta bukti QRIS.\n"
-                "3. Ubah status ke **Pesanan Sudah Bisa Diambil**."
+                "2. Cek bukti QRIS lalu **Konfirmasi / Tolak** pembayaran (dengan konfirmasi ganda).\n"
+                "3. Tandai **Pesanan Sudah Bisa Diambil** setelah selesai disiapkan."
             )
 
 
@@ -207,6 +211,7 @@ def _render_sidebar(user: dict[str, Any]) -> None:
                 st.session_state["user"] = None
                 st.session_state["cart"] = {"tenant_id": None, "items": {}}
                 st.session_state["active_storefront_tenant_id"] = None
+                st.session_state["seller_pending_action"] = None
                 st.rerun()
 
             st.divider()
@@ -256,6 +261,7 @@ def _render_sidebar(user: dict[str, Any]) -> None:
                 st.markdown(f"**Status:** {status_text}")
             if st.button("🚪 Keluar (Logout)", use_container_width=True):
                 st.session_state["user"] = None
+                st.session_state["seller_pending_action"] = None
                 st.rerun()
 
             st.divider()

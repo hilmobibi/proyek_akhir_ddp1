@@ -292,7 +292,7 @@ def _render_checkout_tab(user: dict[str, Any]) -> None:
 
 
 def _render_live_queue_tab(user: dict[str, Any]) -> None:
-    """Merender Tab 3: Pelacakan 2 tahap Live Queue milik pembeli."""
+    """Merender Tab 3: Pelacakan Live Queue & verifikasi pembayaran milik pembeli."""
     top_col, refresh_col = st.columns([4, 1])
     with top_col:
         st.markdown("### ⏳ Status Antrean Pesananmu")
@@ -326,17 +326,32 @@ def _render_live_queue_tab(user: dict[str, Any]) -> None:
                 if order["notes"]:
                     st.caption(f"📝 Catatan: *{order['notes']}*")
 
-            if order["status"] == db_service.STATUS_READY:
+            status = order["status"]
+            if status == db_service.STATUS_READY:
                 st.progress(100)
                 st.success(
-                    f"🔔 **Status (2/2): {db_service.STATUS_READY}!** — "
+                    f"🔔 **Status (100%): {db_service.STATUS_READY}!** — "
                     f"Silakan ambil pesananmu langsung di konter kios dengan menunjukkan nomor antrean **#{order['queue_number']}**."
                 )
-            else:
+            elif status == db_service.STATUS_PREPARING:
                 st.progress(50)
                 st.info(
-                    f"🍳 **Status (1/2): {db_service.STATUS_PREPARING}** — "
-                    "Kios sedang menyiapkan makanan/minumanmu. Cek berkala ya!"
+                    f"🍳 **Status (50%): {db_service.STATUS_PREPARING}** — "
+                    "Pembayaran telah dikonfirmasi! Kios sedang menyiapkan makanan/minumanmu."
+                )
+            elif status == db_service.STATUS_REJECTED:
+                st.progress(0)
+                reason = order.get("rejection_reason", "").strip()
+                reason_text = f" Alasan: *{reason}*" if reason else ""
+                st.error(
+                    f"❌ **Status: {db_service.STATUS_REJECTED}** — "
+                    f"Bukti pembayaran QRIS kamu ditolak oleh penjual.{reason_text}"
+                )
+            else:
+                st.progress(0)
+                st.warning(
+                    f"🕒 **Status (0%): {db_service.STATUS_PENDING_PAYMENT}** — "
+                    "Penjual sedang memeriksa bukti pembayaran QRIS yang kamu unggah."
                 )
 
             with st.expander("🧾 Lihat Bukti Pembayaran QRIS"):
@@ -353,7 +368,8 @@ def render_buyer_view(user: dict[str, Any]) -> None:
     if last_order:
         st.success(
             f"✅ Pesanan **#{last_order['queue_number']}** di **{last_order['tenant_name']}** "
-            "berhasil dibuat! Cek progresnya di tab **⏳ Live Queue & Tracking**."
+            "berhasil dikirim dan sedang **Menunggu Konfirmasi Pembayaran** oleh penjual. "
+            "Pantau progresnya di tab **⏳ Live Queue & Tracking**."
         )
 
     cart_count = sum(

@@ -18,9 +18,16 @@ import html
 from typing import Any
 import uuid
 
+STATUS_PENDING_PAYMENT = "Menunggu Konfirmasi Pembayaran"
 STATUS_PREPARING = "Sedang Menyiapkan Pesanan"
 STATUS_READY = "Pesanan Sudah Bisa Diambil"
-VALID_ORDER_STATUSES = (STATUS_PREPARING, STATUS_READY)
+STATUS_REJECTED = "Pembayaran Ditolak"
+VALID_ORDER_STATUSES = (
+    STATUS_PENDING_PAYMENT,
+    STATUS_PREPARING,
+    STATUS_READY,
+    STATUS_REJECTED,
+)
 
 _FALLBACK_STORE: dict[str, Any] = {}
 
@@ -352,8 +359,9 @@ def create_order(
 ) -> dict[str, Any]:
     """Membuat pesanan baru setelah bukti pembayaran QRIS diunggah.
 
-    Status default otomatis diset ke ``STATUS_PREPARING`` ("Sedang Menyiapkan Pesanan"),
-    dan nomor antrean di-generate berurutan per kios (mis. ``A-001``, ``B-001``).
+    Status default otomatis diset ke ``STATUS_PENDING_PAYMENT``
+    ("Menunggu Konfirmasi Pembayaran"), dan nomor antrean di-generate berurutan
+    per kios (mis. ``A-001``, ``B-001``).
 
     Supabase equivalent:
     ``supabase.table("orders").insert(order_payload).execute()``
@@ -392,7 +400,8 @@ def create_order(
             payment_proof_bytes, payment_filename
         ),
         "payment_filename": payment_filename,
-        "status": STATUS_PREPARING,
+        "status": STATUS_PENDING_PAYMENT,
+        "rejection_reason": "",
         "created_at": datetime.now().strftime("%d %b %Y, %H:%M WIB"),
     }
     store["db_orders"].append(order)
@@ -422,11 +431,13 @@ def get_all_orders() -> list[dict[str, Any]]:
     return list(reversed(_get_store()["db_orders"]))
 
 
-def update_order_status(order_id: str, new_status: str) -> bool:
-    """Memperbarui status pesanan (``Sedang Menyiapkan Pesanan`` / ``Pesanan Sudah Bisa Diambil``).
+def update_order_status(
+    order_id: str, new_status: str, rejection_reason: str = ""
+) -> bool:
+    """Memperbarui status pesanan beserta alasan penolakan jika pembayaran ditolak.
 
     Supabase equivalent:
-    ``supabase.table("orders").update({"status": new_status}).eq("id", order_id).execute()``
+    ``supabase.table("orders").update({"status": new_status, "rejection_reason": rejection_reason}).eq("id", order_id).execute()``
     """
     if new_status not in VALID_ORDER_STATUSES:
         raise ValueError(f"Status '{new_status}' tidak valid.")
@@ -435,6 +446,9 @@ def update_order_status(order_id: str, new_status: str) -> bool:
     for order in _get_store()["db_orders"]:
         if order["id"] == order_id:
             order["status"] = new_status
+            order["rejection_reason"] = (
+                rejection_reason.strip() if new_status == STATUS_REJECTED else ""
+            )
             return True
     return False
 

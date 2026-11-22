@@ -10,45 +10,200 @@ import buyer_view
 import db_service
 
 
+def _set_pending_action(order_id: str | None, action: str | None = None) -> None:
+    """Menyimpan atau membersihkan status konfirmasi ganda aksi penjual."""
+    if order_id is None or action is None:
+        st.session_state["seller_pending_action"] = None
+    else:
+        st.session_state["seller_pending_action"] = {
+            "order_id": order_id,
+            "action": action,
+        }
+
+
+def _render_order_status_badge(status: str) -> None:
+    """Merender badge status pesanan pada kolom kiri kartu antrean penjual."""
+    if status == db_service.STATUS_READY:
+        st.success("🔔 100% · Sudah Bisa Diambil")
+    elif status == db_service.STATUS_PREPARING:
+        st.warning("🍳 50% · Sedang Disiapkan")
+    elif status == db_service.STATUS_REJECTED:
+        st.error("❌ Pembayaran Ditolak")
+    else:
+        st.info("🕒 0% · Menunggu Konfirmasi")
+
+
+def _render_order_actions(order: dict[str, Any]) -> None:
+    """Merender tombol aksi penjual lengkap dengan konfirmasi ganda."""
+    order_id = order["id"]
+    status = order["status"]
+    pending = st.session_state.get("seller_pending_action")
+    active_action = (
+        pending["action"]
+        if pending and pending.get("order_id") == order_id
+        else None
+    )
+
+    if status == db_service.STATUS_PENDING_PAYMENT:
+        if active_action == "confirm_payment":
+            st.warning("⚠️ Konfirmasi bukti QRIS sudah valid & nominal sesuai?")
+            if st.button(
+                "✅ Ya, Konfirmasi & Siapkan",
+                key=f"confirm_yes_{order_id}",
+                type="primary",
+                use_container_width=True,
+            ):
+                db_service.update_order_status(order_id, db_service.STATUS_PREPARING)
+                _set_pending_action(None)
+                st.rerun()
+            if st.button(
+                "❌ Batal",
+                key=f"confirm_cancel_{order_id}",
+                use_container_width=True,
+            ):
+                _set_pending_action(None)
+                st.rerun()
+        elif active_action == "reject_payment":
+            st.error("⚠️ Yakin ingin menolak bukti pembayaran pesanan ini?")
+            reject_reason = st.text_input(
+                "Alasan Penolakan (Opsional)",
+                placeholder="Contoh: Nominal tidak sesuai / bukti buram",
+                key=f"reject_reason_{order_id}",
+            )
+            if st.button(
+                "🚫 Ya, Tolak Pesanan",
+                key=f"reject_yes_{order_id}",
+                type="primary",
+                use_container_width=True,
+            ):
+                db_service.update_order_status(
+                    order_id,
+                    db_service.STATUS_REJECTED,
+                    rejection_reason=reject_reason,
+                )
+                _set_pending_action(None)
+                st.rerun()
+            if st.button(
+                "❌ Batal",
+                key=f"reject_cancel_{order_id}",
+                use_container_width=True,
+            ):
+                _set_pending_action(None)
+                st.rerun()
+        else:
+            if st.button(
+                "✅ Konfirmasi Pembayaran",
+                key=f"btn_confirm_pay_{order_id}",
+                type="primary",
+                use_container_width=True,
+            ):
+                _set_pending_action(order_id, "confirm_payment")
+                st.rerun()
+            if st.button(
+                "❌ Tolak Pembayaran",
+                key=f"btn_reject_pay_{order_id}",
+                type="secondary",
+                use_container_width=True,
+            ):
+                _set_pending_action(order_id, "reject_payment")
+                st.rerun()
+
+    elif status == db_service.STATUS_PREPARING:
+        if active_action == "mark_ready":
+            st.warning("⚠️ Pastikan pesanan sudah selesai & siap diambil di konter!")
+            if st.button(
+                "🔔 Ya, Sudah Bisa Diambil",
+                key=f"ready_yes_{order_id}",
+                type="primary",
+                use_container_width=True,
+            ):
+                db_service.update_order_status(order_id, db_service.STATUS_READY)
+                _set_pending_action(None)
+                st.rerun()
+            if st.button(
+                "❌ Batal",
+                key=f"ready_cancel_{order_id}",
+                use_container_width=True,
+            ):
+                _set_pending_action(None)
+                st.rerun()
+        else:
+            if st.button(
+                "🔔 Tandai Pesanan Sudah Bisa Diambil",
+                key=f"seller_ready_{order_id}",
+                type="primary",
+                use_container_width=True,
+            ):
+                _set_pending_action(order_id, "mark_ready")
+                st.rerun()
+
+    elif status == db_service.STATUS_READY:
+        if st.button(
+            "↩️ Kembalikan ke Sedang Menyiapkan",
+            key=f"seller_prep_{order_id}",
+            use_container_width=True,
+        ):
+            db_service.update_order_status(order_id, db_service.STATUS_PREPARING)
+            _set_pending_action(None)
+            st.rerun()
+
+    else:
+        st.caption("Pesanan ini telah ditolak.")
+
+
 def _render_orders_tab(tenant: dict[str, Any]) -> None:
     """Merender Tab 1 Penjual: Dashboard antrean pesanan masuk secara berurutan (FIFO)."""
     orders = db_service.get_tenant_orders(tenant["id"])
 
+    pending_count = sum(
+        1 for o in orders if o["status"] == db_service.STATUS_PENDING_PAYMENT
+    )
     preparing_count = sum(
         1 for o in orders if o["status"] == db_service.STATUS_PREPARING
     )
     ready_count = sum(1 for o in orders if o["status"] == db_service.STATUS_READY)
-    total_revenue = sum(int(o["total_price"]) for o in orders)
+    confirmed_revenue = sum(
+        int(o["total_price"])
+        for o in orders
+        if o["status"] in (db_service.STATUS_PREPARING, db_service.STATUS_READY)
+    )
 
-    m1, m2, m3, m4 = st.columns([1, 1, 1.3, 0.8])
+    m1, m2, m3, m4, m5 = st.columns([1.1, 1.1, 1.1, 1.4, 0.9])
     with m1:
-        st.metric("🍳 Sedang Disiapkan", preparing_count)
+        st.metric("🕒 Menunggu Konfirmasi", pending_count)
     with m2:
-        st.metric("🔔 Sudah Bisa Diambil", ready_count)
+        st.metric("🍳 Sedang Disiapkan", preparing_count)
     with m3:
-        st.metric("💰 Total Pendapatan", buyer_view.format_rupiah(total_revenue))
+        st.metric("🔔 Sudah Bisa Diambil", ready_count)
     with m4:
+        st.metric(
+            "💰 Pendapatan Terkonfirmasi",
+            buyer_view.format_rupiah(confirmed_revenue),
+        )
+    with m5:
         st.write("")
         if st.button("🔄 Refresh Antrean", use_container_width=True):
             st.rerun()
 
+    filter_status_map = {
+        "Menunggu Konfirmasi": db_service.STATUS_PENDING_PAYMENT,
+        "Sedang Disiapkan": db_service.STATUS_PREPARING,
+        "Sudah Bisa Diambil": db_service.STATUS_READY,
+        "Ditolak": db_service.STATUS_REJECTED,
+    }
     filter_choice = st.radio(
         "Filter Status Antrean:",
-        options=["Semua", "Sedang Disiapkan", "Sudah Bisa Diambil"],
+        options=["Semua", *filter_status_map.keys()],
         horizontal=True,
         key=f"seller_order_filter_{tenant['id']}",
     )
 
-    if filter_choice == "Sedang Disiapkan":
-        filtered_orders = [
-            o for o in orders if o["status"] == db_service.STATUS_PREPARING
-        ]
-    elif filter_choice == "Sudah Bisa Diambil":
-        filtered_orders = [
-            o for o in orders if o["status"] == db_service.STATUS_READY
-        ]
-    else:
-        filtered_orders = orders
+    target_status = filter_status_map.get(filter_choice)
+    filtered_orders = (
+        [o for o in orders if o["status"] == target_status]
+        if target_status is not None
+        else orders
+    )
 
     if not filtered_orders:
         st.info("Belum ada pesanan pada kategori antrean ini.")
@@ -56,14 +211,11 @@ def _render_orders_tab(tenant: dict[str, Any]) -> None:
 
     for order in filtered_orders:
         with st.container(border=True):
-            left_col, mid_col, right_col = st.columns([1.1, 2.5, 1.4])
+            left_col, mid_col, right_col = st.columns([1.1, 2.4, 1.5])
             with left_col:
                 st.caption("Nomor Antrean")
                 st.markdown(f"# `#{order['queue_number']}`")
-                if order["status"] == db_service.STATUS_READY:
-                    st.success("🔔 Sudah Bisa Diambil")
-                else:
-                    st.warning("🍳 Sedang Disiapkan")
+                _render_order_status_badge(order["status"])
 
             with mid_col:
                 st.markdown(
@@ -81,32 +233,24 @@ def _render_orders_tab(tenant: dict[str, Any]) -> None:
                     st.info(f"📝 **Catatan Pembeli:** {order['notes']}")
                 else:
                     st.caption("📝 Tidak ada catatan khusus dari pembeli.")
+                if (
+                    order["status"] == db_service.STATUS_REJECTED
+                    and order.get("rejection_reason")
+                ):
+                    st.error(
+                        f"🚫 **Alasan Penolakan:** {order['rejection_reason']}"
+                    )
 
             with right_col:
                 st.write("")
-                if order["status"] == db_service.STATUS_PREPARING:
-                    if st.button(
-                        "🔔 Tandai Pesanan Sudah Bisa Diambil",
-                        key=f"seller_ready_{order['id']}",
-                        type="primary",
-                        use_container_width=True,
-                    ):
-                        db_service.update_order_status(
-                            order["id"], db_service.STATUS_READY
-                        )
-                        st.rerun()
-                else:
-                    if st.button(
-                        "↩️ Kembalikan ke Sedang Menyiapkan",
-                        key=f"seller_prep_{order['id']}",
-                        use_container_width=True,
-                    ):
-                        db_service.update_order_status(
-                            order["id"], db_service.STATUS_PREPARING
-                        )
-                        st.rerun()
+                _render_order_actions(order)
 
-            with st.expander("🧾 Verifikasi Bukti Pembayaran QRIS"):
+            auto_expand_proof = (
+                order["status"] == db_service.STATUS_PENDING_PAYMENT
+            )
+            with st.expander(
+                "🧾 Verifikasi Bukti Pembayaran QRIS", expanded=auto_expand_proof
+            ):
                 st.image(
                     order["payment_proof_bytes"],
                     caption=f"File: {order['payment_filename']}",
