@@ -1,11 +1,16 @@
-## Fitur utama:
+## Fitur Utama (Quentin — Queue Kantin Online):
+
 ### A. MVP — Role Pembeli (Mahasiswa)
-1. Autentikasi Sederhana: Register & Login (bisa pakai Firebase Auth atau simpan user di Firestore dengan password ter-hash).
-2. Etalase Kantin (Home): Daftar tenant/kios kantin (status: Buka / Tutup) dan daftar menu lengkap dengan harga, foto, & status stok (Tersedia / Habis).
-3. Keranjang & Checkout: Tambah/kurangi item, catatan pesanan (misal: "tidak pedas"), pilih metode ambil (Ambil Sendiri / Diantar ke Meja), lalu klik Pesan.
-4. Live Queue & Tracking Status: Halaman lacak pesanan dengan nomor antrean dan status bertahap: Menunggu Konfirmasi → Sedang Dimasak → Siap Diambil → Selesai.
+- [x] **Autentikasi Sederhana & Hook SSO UI:** Form Login Mahasiswa (Nama & NPM + Demo Login) serta placeholder `st.query_params` (`?ticket=`) untuk integrasi SSO UI.
+- [x] **Etalase Kantin (Home):** Daftar kios kantin (`Buka` / `Tutup`), daftar menu dengan harga, deskripsi, dan status stok (`Tersedia` / `Habis`), serta penguncian keranjang per 1 kios.
+- [x] **Keranjang, QRIS Per Toko, & Checkout:** Tambah/kurangi item, catatan pesanan, pengambilan default di konter kios, tampilan QRIS khusus per kios, dan wajib upload bukti pembayaran sebelum tombol pesan aktif.
+- [x] **Live Queue & Tracking Status (2 Tahap):** Halaman lacak pesanan dengan nomor antrean (`#A-001`, dst.), preview bukti bayar, serta 2 status bertahap:
+  1. `Sedang Menyiapkan Pesanan` (default)
+  2. `Pesanan Sudah Bisa Diambil`
+- [x] **Panel Simulasi Penjual (Sidebar):** Untuk mengetes perubahan status Live Queue dan mengecek bukti bayar QRIS dari sisi kios.
+- [ ] **Integrasi Database & Auth Asli:** Sambungkan `db_service.py` dan hook SSO UI di `main.py` ke Supabase.
 
 ### B. MVP — Role Penjual (Kios Kantin)
-1. Kelola Menu: Tambah/edit/hapus menu dan tombol cepat untuk ubah status stok (Habis / Ada) serta status toko (Buka / Tutup).
-2. Dashboard Pesanan Masuk: Melihat daftar antrean pesanan yang masuk secara berurutan, lengkap dengan catatan pembeli.
-3. Update Status Pesanan: Tombol aksi (Terima → Masak → Siap Diambil → Selesai) yang langsung memperbarui halaman Pembeli.
+- [ ] **Kelola Menu:** Tambah/edit/hapus menu dan tombol cepat untuk ubah status stok (`Tersedia` / `Habis`) serta status toko (`Buka` / `Tutup`).
+- [ ] **Dashboard Pesanan Masuk:** Melihat daftar antrean pesanan yang masuk secara berurutan beserta catatan pembeli dan verifikasi bukti pembayaran QRIS.
+- [ ] **Update Status Pesanan:** Tombol aksi (`Sedang Menyiapkan Pesanan` → `Pesanan Sudah Bisa Diambil`) yang langsung memperbarui halaman Pembeli.
