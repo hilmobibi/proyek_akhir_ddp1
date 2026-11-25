@@ -5,7 +5,7 @@ Aplikasi pemesanan dan antrean kantin fakultas berbasis **Python (Streamlit)** d
 ### Anggota Kelompok
 - Azzam
 - Hilmo
-- Rasya
+- Rasya Haekal Jasilva (npm : 2606860044)
 
 ---
 
