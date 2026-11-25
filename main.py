@@ -6,6 +6,7 @@ from typing import Any
 
 import streamlit as st
 
+import auth_service
 import buyer_view
 import db_service
 import seller_view
@@ -18,11 +19,12 @@ def _default_demo_buyer() -> dict[str, Any]:
         "name": "Hilmo (Demo)",
         "npm": "2606123456",
         "role": "buyer",
+        "auth_provider": "demo",
     }
 
 
 def _init_session_state() -> None:
-    """Menginisialisasi state bawaan aplikasi dan mock database."""
+    """Menginisialisasi state bawaan aplikasi dan database."""
     db_service.init_db()
     if "user" not in st.session_state:
         st.session_state["user"] = None
@@ -34,6 +36,8 @@ def _init_session_state() -> None:
         st.session_state["active_storefront_tenant_id"] = None
     if "seller_pending_action" not in st.session_state:
         st.session_state["seller_pending_action"] = None
+    if "sso_auth_error" not in st.session_state:
+        st.session_state["sso_auth_error"] = ""
 
 
 def _set_buyer_session(buyer: dict[str, Any]) -> None:
@@ -41,6 +45,7 @@ def _set_buyer_session(buyer: dict[str, Any]) -> None:
     st.session_state["user"] = buyer
     st.session_state["last_buyer_user"] = buyer
     st.session_state["seller_pending_action"] = None
+    st.session_state["sso_auth_error"] = ""
 
 
 def _set_seller_session(tenant: dict[str, Any]) -> None:
@@ -52,29 +57,162 @@ def _set_seller_session(tenant: dict[str, Any]) -> None:
         "role": "seller",
     }
     st.session_state["seller_pending_action"] = None
+    st.session_state["sso_auth_error"] = ""
 
 
 def _handle_sso_callback_hook() -> None:
-    """Placeholder integrasi SSO UI (`?ticket=ST-...`) dari rekan tim.
-
-    Saat teman yang menangani SSO UI + Supabase sudah selesai, ganti bagian
-    simulasi di bawah ini dengan verifikasi tiket CAS SSO UI dan query user
-    ke Supabase.
-    """
+    """Memvalidasi callback tiket CAS 2.0 dari SSO UI (`?ticket=ST-...`)."""
     if "ticket" in st.query_params and st.session_state["user"] is None:
-        ticket = st.query_params["ticket"]
-        # TODO (Integrasi SSO UI + Supabase):
-        # sso_profile = verify_sso_ticket(ticket)
-        # db_user = upsert_supabase_user(sso_profile)
-        _set_buyer_session(
-            {
-                "id": f"sso-{ticket[:8]}",
-                "name": "Mahasiswa SSO UI",
-                "npm": "2606000001",
-                "role": "buyer",
-            }
-        )
+        ticket = str(st.query_params["ticket"])
         st.query_params.clear()
+
+        result = auth_service.validate_sso_ticket(ticket)
+        if result.get("authenticated"):
+            buyer = db_service.upsert_sso_buyer(
+                username=result["username"],
+                name=result["name"],
+                npm=result["npm"],
+                kd_org=result.get("kd_org", ""),
+            )
+            _set_buyer_session(buyer)
+            st.rerun()
+        else:
+            st.session_state["sso_auth_error"] = result.get(
+                "error", "Validasi tiket SSO UI gagal."
+            )
+
+
+def _render_buyer_login_tab() -> None:
+    """Merender form login Pembeli: SSO UI CAS 2.0 + Akun Cadangan NPM & Password."""
+    st.subheader("Masuk sebagai Mahasiswa")
+    sso_err = st.session_state.get("sso_auth_error", "")
+    if sso_err:
+        st.error(f"Login SSO UI gagal ({sso_err}). Gunakan akun NPM & Password di bawah jika domain belum di-whitelist.")
+
+    st.link_button(
+        "🎓 Masuk dengan SSO UI",
+        auth_service.build_sso_login_url(),
+        type="primary",
+        use_container_width=True,
+    )
+    st.caption(
+        "Autentikasi resmi mahasiswa via protokol CAS 2.0 (sso.ui.ac.id/cas2)."
+    )
+
+    st.divider()
+    st.caption("Atau masuk / daftar menggunakan akun GoFood Kancil:")
+
+    buyer_mode = st.segmented_control(
+        "Mode Akun Mahasiswa",
+        options=["Masuk Akun", "Daftar Akun"],
+        default="Masuk Akun",
+        required=True,
+        label_visibility="collapsed",
+        width="stretch",
+        key="buyer_auth_mode",
+    )
+
+    if buyer_mode == "Daftar Akun":
+        with st.form("student_register_form"):
+            reg_name = st.text_input("Nama Lengkap", placeholder="Contoh: Hilmo")
+            reg_npm = st.text_input("NPM", placeholder="Contoh: 2606123456")
+            reg_pw = st.text_input(
+                "Password",
+                type="password",
+                placeholder="Minimal 4 karakter",
+            )
+            reg_submitted = st.form_submit_button(
+                "📝 Daftar & Masuk", type="primary", use_container_width=True
+            )
+
+        if reg_submitted:
+            try:
+                buyer = db_service.register_buyer(reg_name, reg_npm, reg_pw)
+                _set_buyer_session(buyer)
+                st.rerun()
+            except ValueError as exc:
+                st.error(str(exc))
+    else:
+        with st.form("student_login_form"):
+            login_npm = st.text_input("NPM", placeholder="Contoh: 2606123456")
+            login_pw = st.text_input(
+                "Password",
+                type="password",
+                placeholder="Masukkan password akunmu",
+            )
+            login_submitted = st.form_submit_button(
+                "🔑 Masuk ke Kantin", type="primary", use_container_width=True
+            )
+
+        if login_submitted:
+            buyer = db_service.authenticate_buyer(login_npm, login_pw)
+            if buyer is None:
+                st.error(
+                    "NPM atau password tidak ditemukan. Silakan pilih Daftar Akun terlebih dahulu."
+                )
+            else:
+                _set_buyer_session(buyer)
+                st.rerun()
+
+    st.divider()
+    if st.button("⚡ Login Cepat Pembeli (Demo)", use_container_width=True):
+        _set_buyer_session(_default_demo_buyer())
+        st.rerun()
+
+
+def _render_seller_login_tab(
+    tenants: list[dict[str, Any]], tenant_map: dict[str, dict[str, Any]]
+) -> None:
+    """Merender form login Penjual berbasis Nama Kios + Password."""
+    st.subheader("Masuk sebagai Pengelola Kios")
+    if not tenants:
+        st.warning("Belum ada data kios.")
+        return
+
+    tenant_names = ", ".join(t["name"] for t in tenants)
+    st.caption(
+        f"Masukkan Nama Kios dan Password. Kios terdaftar: {tenant_names} "
+        f"(Password demo awal: `{db_service.DEFAULT_SELLER_PASSWORD}`)."
+    )
+    with st.form("seller_login_form"):
+        kios_name_input = st.text_input(
+            "Nama Kios",
+            placeholder="Contoh: Kantin Ayam Geprek Mas Budi",
+        )
+        password_input = st.text_input(
+            "Password",
+            type="password",
+            placeholder="Masukkan password kios",
+        )
+        seller_submit = st.form_submit_button(
+            "🔑 Masuk sebagai Penjual",
+            type="primary",
+            use_container_width=True,
+        )
+
+    if seller_submit:
+        matched_tenant = db_service.authenticate_seller(
+            kios_name_input, password_input
+        )
+        if matched_tenant is None:
+            st.error("Nama kios atau password salah.")
+        else:
+            _set_seller_session(matched_tenant)
+            st.rerun()
+
+    st.divider()
+    quick_tid = st.selectbox(
+        "Kios untuk Login Cepat (Demo):",
+        options=[t["id"] for t in tenants],
+        format_func=lambda tid: tenant_map[tid]["name"],
+        key="quick_seller_tenant_select",
+    )
+    if st.button(
+        "⚡ Login Cepat Penjual (Kios Terpilih)",
+        use_container_width=True,
+    ):
+        _set_seller_session(tenant_map[quick_tid])
+        st.rerun()
 
 
 def _render_login_page() -> None:
@@ -91,113 +229,50 @@ def _render_login_page() -> None:
             tab_buyer_login, tab_seller_login = st.tabs(
                 ["Pembeli (Mahasiswa)", "Penjual (Kios Kantin)"]
             )
-
             with tab_buyer_login:
-                st.subheader("Masuk sebagai Mahasiswa")
-                st.caption(
-                    "Masukkan Nama & NPM untuk mulai memesan. "
-                    "(Nantinya akan terhubung ke Login SSO UI + Supabase)."
-                )
-                with st.form("student_login_form"):
-                    name = st.text_input("Nama Mahasiswa", placeholder="Contoh: Hilmo")
-                    npm = st.text_input("NPM", placeholder="Contoh: 2606123456")
-                    submitted = st.form_submit_button(
-                        "Masuk ke Kantin", type="primary", use_container_width=True
-                    )
-
-                if submitted:
-                    clean_name = name.strip()
-                    clean_npm = npm.strip()
-                    if not clean_name or not clean_npm:
-                        st.error("Nama dan NPM wajib diisi.")
-                    else:
-                        _set_buyer_session(
-                            {
-                                "id": f"npm-{clean_npm}",
-                                "name": clean_name,
-                                "npm": clean_npm,
-                                "role": "buyer",
-                            }
-                        )
-                        st.rerun()
-
-                st.divider()
-                if st.button(
-                    "⚡ Login Cepat Pembeli (Demo)", use_container_width=True
-                ):
-                    _set_buyer_session(_default_demo_buyer())
-                    st.rerun()
-
+                _render_buyer_login_tab()
             with tab_seller_login:
-                st.subheader("Masuk sebagai Pengelola Kios")
-                st.caption(
-                    "Pilih kios yang dikelola dan masukkan PIN kios "
-                    "(PIN demo default: `1234`)."
-                )
-                if not tenants:
-                    st.warning("Belum ada data kios.")
-                else:
-                    with st.form("seller_login_form"):
-                        selected_tid = st.selectbox(
-                            "Pilih Kios Kantin",
-                            options=[t["id"] for t in tenants],
-                            format_func=lambda tid: tenant_map[tid]["name"],
-                        )
-                        pin_input = st.text_input(
-                            "PIN Kios", type="password", placeholder="Masukkan PIN (1234)"
-                        )
-                        seller_submit = st.form_submit_button(
-                            "Masuk sebagai Penjual",
-                            type="primary",
-                            use_container_width=True,
-                        )
-
-                    if seller_submit:
-                        chosen_tenant = tenant_map[selected_tid]
-                        if pin_input.strip() != chosen_tenant.get("pin", "1234"):
-                            st.error("PIN kios salah. Gunakan `1234` untuk demo.")
-                        else:
-                            _set_seller_session(chosen_tenant)
-                            st.rerun()
-
-                    st.divider()
-                    quick_tid = st.selectbox(
-                        "Kios untuk Login Cepat:",
-                        options=[t["id"] for t in tenants],
-                        format_func=lambda tid: tenant_map[tid]["name"],
-                        key="quick_seller_tenant_select",
-                    )
-                    if st.button(
-                        "⚡ Login Cepat Penjual (Kios Terpilih)",
-                        use_container_width=True,
-                    ):
-                        _set_seller_session(tenant_map[quick_tid])
-                        st.rerun()
+                _render_seller_login_tab(tenants, tenant_map)
 
     with col_right:
         with st.container(border=True):
             st.markdown("#### Alur GoFood Kancil")
             st.markdown(
                 "**Untuk Mahasiswa (Pembeli):**\n"
-                "1. Pilih kios & menu di **Etalase Kantin**.\n"
-                "2. Checkout **1 kios** per pesanan & scan **QRIS khusus kios**.\n"
-                "3. **Upload bukti pembayaran** (wajib) untuk masuk antrean (`0%`).\n"
+                "1. Masuk via **SSO UI** atau akun NPM & Password.\n"
+                "2. Pilih kios & menu di **Etalase Kantin**.\n"
+                "3. Scan **QRIS khusus kios** & upload bukti pembayaran (`0%`).\n"
                 "4. Pantau **Live Queue** (`0% → 50% → 100%`) & ambil di konter kios.\n\n"
                 "**Untuk Penjual Kios:**\n"
-                "1. Kelola menu, harga, stok, & status **Buka/Tutup** kios.\n"
-                "2. Cek bukti QRIS lalu **Konfirmasi / Tolak** pembayaran (dengan konfirmasi ganda).\n"
-                "3. Tandai **Pesanan Sudah Bisa Diambil** setelah selesai disiapkan."
+                "1. Masuk menggunakan **Nama Kios + Password**.\n"
+                "2. Kelola menu, harga, stok, & status **Buka/Tutup** kios.\n"
+                "3. Cek bukti QRIS lalu **Konfirmasi / Tolak** pembayaran (konfirmasi ganda).\n"
+                "4. Tandai **Pesanan Sudah Bisa Diambil** setelah selesai disiapkan."
             )
+            db_mode = db_service.get_db_backend_mode()
+            db_text = (
+                "Firebase Cloud Firestore (Aktif)"
+                if db_mode == "firebase"
+                else "Memori Lokal (Fallback — taruh serviceAccountKey.json untuk Cloud)"
+            )
+            st.caption(f"Status Database: **{db_text}**")
 
 
 def _render_sidebar(user: dict[str, Any]) -> None:
-    """Merender sidebar profil, ringkasan, dan fitur pindah role cepat untuk demo."""
+    """Merender sidebar profil, status database, ringkasan, dan pindah role demo."""
     tenants = db_service.get_tenants()
     tenant_map = {t["id"]: t for t in tenants}
+    db_mode = db_service.get_db_backend_mode()
+    db_label = (
+        "Firebase Cloud Firestore"
+        if db_mode == "firebase"
+        else "Memori Lokal (Fallback)"
+    )
 
     with st.sidebar:
         st.markdown("## GoFood Kancil")
         st.caption("Queue Kantin Online — Fakultas")
+        st.caption(f"Database: **{db_label}**")
         st.divider()
 
         if user["role"] == "buyer":
@@ -294,7 +369,10 @@ def _render_sidebar(user: dict[str, Any]) -> None:
                 key="switch_to_buyer_btn",
                 use_container_width=True,
             ):
-                buyer_profile = st.session_state.get("last_buyer_user") or _default_demo_buyer()
+                buyer_profile = (
+                    st.session_state.get("last_buyer_user")
+                    or _default_demo_buyer()
+                )
                 _set_buyer_session(buyer_profile)
                 st.rerun()
 

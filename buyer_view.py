@@ -304,6 +304,7 @@ def _render_live_queue_tab(user: dict[str, Any]) -> None:
         st.markdown("### Status Antrean Pesananmu")
     with refresh_col:
         if st.button("🔄 Refresh Status", use_container_width=True):
+            db_service.clear_cache()
             st.rerun()
 
     orders = db_service.get_buyer_orders(user["id"])

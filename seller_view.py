@@ -182,6 +182,7 @@ def _render_orders_tab(tenant: dict[str, Any]) -> None:
     with m5:
         st.write("")
         if st.button("🔄 Refresh Antrean", use_container_width=True):
+            db_service.clear_cache()
             st.rerun()
 
     nav_labels = {
