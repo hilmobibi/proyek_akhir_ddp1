@@ -1,4 +1,4 @@
-# Tugas Akhir DDP1 GoFood Kancil (Queue Kantin Online)
+# Tugas Akhir DDP1 — Pesan Kancil
 
 ### Anggota Kelompok:
 - Azzam
@@ -20,7 +20,7 @@ Karena jam makan siang terbatas dan hectic banget, alangkah baiknya kalau bisa m
 ## Cara Menghubungkan ke Firebase Cloud Firestore (2 Menit)
 Aplikasi menggunakan sistem **Dual-Mode**: jika kunci Firebase ditemukan, otomatis memakai **Firebase Cloud Firestore**; jika belum ditaruh, otomatis memakai memori lokal agar tidak crash.
 
-1. Buka `https://console.firebase.google.com` dan klik **Add project** (misal: `gofood-kancil`).
+1. Buka `https://console.firebase.google.com` dan klik **Add project** (misal: `pesan-kancil`).
 2. Di menu kiri klik **Build -> Firestore Database -> Create database** (pilih lokasi `asia-southeast2` Jakarta atau `asia-southeast1` Singapore).
 3. Klik ikon **Gerigi (Project settings) -> tab Service accounts -> Generate new private key**.
 4. Simpan file JSON yang terunduh ke folder utama proyek ini dengan nama **`serviceAccountKey.json`** (sudah otomatis diabaikan oleh `.gitignore` agar aman).
@@ -47,5 +47,5 @@ client_x509_cert_url = "..."
 ---
 
 ## Akun Login
-- **Mahasiswa (Pembeli):** Login via **SSO UI (`sso.ui.ac.id/cas2`)**, atau daftar/masuk menggunakan **NPM + Password** (tersedia juga tombol Login Cepat Demo).
-- **Penjual (Kios Kantin):** Masuk menggunakan **Nama Kios + Password** (password demo awal untuk ketiga kios: `kancil123`).
+- **Mahasiswa (Pembeli):** Login resmi menggunakan **SSO UI (`sso.ui.ac.id/cas2`)**.
+- **Penjual (Kios Kantin):** Dapat mendaftar (**Daftar Kios Baru**) atau masuk menggunakan **Nama Kios + Password**.

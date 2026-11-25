@@ -1,4 +1,4 @@
-"""Tampilan UI Role Penjual (Kios Kantin) untuk GoFood Kancil — Tema Putih-Abu."""
+"""Tampilan UI Role Penjual (Kios Kantin) untuk Pesan Kancil — Tema Putih-Abu."""
 
 from __future__ import annotations
 
@@ -458,8 +458,29 @@ def _render_profile_screen(tenant: dict[str, Any]) -> None:
     with c_qris:
         with st.container(border=True):
             st.markdown("#### QRIS Pembayaran Kios")
-            st.caption(f"NMID: `{tenant['nmid']}`")
-            st.image(tenant["qris_svg"], width=240)
+            if tenant.get("qris_image_b64"):
+                st.caption("QRIS asli kios sudah terpasang dan tampil di halaman checkout pembeli.")
+            else:
+                st.caption("Saat ini masih memakai QRIS contoh bawaan. Unggah QRIS aslimu di bawah.")
+            st.image(db_service.get_tenant_qris_display(tenant), width=260)
+            uploaded_qris = st.file_uploader(
+                "Unggah Gambar QRIS Asli Kios (PNG / JPG)",
+                type=["png", "jpg", "jpeg"],
+                key=f"upload_kios_qris_{tenant['id']}",
+            )
+            if st.button(
+                "Simpan QRIS Kios",
+                key=f"save_kios_qris_{tenant['id']}",
+                type="primary",
+                disabled=uploaded_qris is None,
+                use_container_width=True,
+            ):
+                db_service.update_tenant_qris(
+                    tenant["id"],
+                    uploaded_qris.getvalue(),
+                    uploaded_qris.name,
+                )
+                st.rerun()
 
 
 def render_seller_view(user: dict[str, Any]) -> None:

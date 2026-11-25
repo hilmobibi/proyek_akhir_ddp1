@@ -1,4 +1,4 @@
-"""Lapisan layanan database dual-mode untuk GoFood Kancil (Queue Kantin Online).
+"""Lapisan layanan database dual-mode untuk Pesan Kancil.
 
 Arsitektur:
 - **1A (Dual-Mode):** Otomatis terhubung ke **Firebase Cloud Firestore** jika file
@@ -219,7 +219,7 @@ def generate_qris_svg_data_uri(
         f'<rect x="2" y="32" width="256" height="14" fill="{safe_color}"/>'
         '<text x="130" y="29" text-anchor="middle" fill="#FFFFFF" '
         'font-family="Arial, sans-serif" font-size="16" font-weight="bold">'
-        "QRIS GOFOOD KANCIL</text>"
+        "QRIS PESAN KANCIL</text>"
         '<text x="130" y="61" text-anchor="middle" fill="#111827" '
         'font-family="Arial, sans-serif" font-size="12" font-weight="bold">'
         f"{safe_name}</text>"
@@ -355,13 +355,27 @@ def _hydrate_tenant(doc_dict: dict[str, Any]) -> dict[str, Any]:
         hydrated["category"] = defaults.get("category", "Kios Kantin")
     if not hydrated.get("eta"):
         hydrated["eta"] = defaults.get("eta", "5-10 mnt")
-    # Pastikan QRIS selalu bertema monokrom bersih
+    # Pastikan QRIS selalu bertema monokrom bersih & hydrate QRIS asli jika sudah diunggah
     hydrated["qris_svg"] = generate_qris_svg_data_uri(
         hydrated.get("name", "Kios Kantin"),
         hydrated.get("nmid", "ID102030400000"),
         "#18181B",
     )
+    qris_b64 = hydrated.get("qris_image_b64", "")
+    hydrated["qris_image_b64"] = qris_b64
+    hydrated["qris_image_bytes"] = (
+        _decode_data_uri_to_bytes(qris_b64) if qris_b64 else b""
+    )
     return hydrated
+
+
+def get_tenant_qris_display(tenant: dict[str, Any]) -> bytes | str:
+    """Mengembalikan gambar QRIS asli yang diunggah penjual, atau QRIS SVG bawaan."""
+    if tenant.get("qris_image_bytes"):
+        return tenant["qris_image_bytes"]
+    if tenant.get("qris_image_b64"):
+        return _decode_data_uri_to_bytes(tenant["qris_image_b64"])
+    return tenant["qris_svg"]
 
 
 def _hydrate_menu(doc_dict: dict[str, Any]) -> dict[str, Any]:
@@ -377,7 +391,7 @@ def _hydrate_menu(doc_dict: dict[str, Any]) -> dict[str, Any]:
 def _build_seed_tenants() -> list[dict[str, Any]]:
     """Membangun data awal 3 kios kantin dengan password ter-hash."""
     default_pw_hash = auth_service.hash_password(
-        DEFAULT_SELLER_PASSWORD, salt="gofoodkancil_seed"
+        DEFAULT_SELLER_PASSWORD, salt="pesankancil_seed"
     )
     return [
         {
@@ -787,6 +801,60 @@ def authenticate_buyer(npm: str, password: str) -> dict[str, Any] | None:
     }
 
 
+def register_seller(
+    name: str,
+    password: str,
+    category: str = "Kios Kantin",
+    description: str = "",
+    eta: str = "5-10 mnt",
+    image_url: str = "",
+    qris_image_b64: str = "",
+) -> dict[str, Any]:
+    """Mendaftarkan kios penjual baru beserta password ter-hash ke koleksi ``tenants``."""
+    init_db()
+    clean_name = name.strip()
+    if not clean_name:
+        raise ValueError("Nama kios wajib diisi.")
+    if len(password) < 4:
+        raise ValueError("Password minimal 4 karakter.")
+
+    existing_names = {t["name"].strip().lower() for t in get_tenants()}
+    if clean_name.lower() in existing_names:
+        raise ValueError(
+            "Nama kios ini sudah terdaftar. Silakan gunakan nama lain atau langsung masuk."
+        )
+
+    tenant_id = f"t-{uuid.uuid4().hex[:6]}"
+    first_alnum = next((ch.upper() for ch in clean_name if ch.isalnum()), "K")
+    nmid = f"ID1020{uuid.uuid4().int % 100_000_000:08d}"
+    new_tenant: dict[str, Any] = {
+        "id": tenant_id,
+        "name": clean_name,
+        "category": category.strip() or "Kios Kantin",
+        "eta": eta.strip() or "5-10 mnt",
+        "image_url": image_url.strip(),
+        "emoji": "",
+        "password_hash": auth_service.hash_password(password),
+        "description": description.strip() or f"Kios {clean_name} di kantin fakultas.",
+        "is_open": True,
+        "queue_prefix": first_alnum,
+        "order_seq": 0,
+        "order_seq_date": "",
+        "nmid": nmid,
+        "qris_image_b64": qris_image_b64.strip(),
+        "qris_svg": generate_qris_svg_data_uri(clean_name, nmid, "#18181B"),
+    }
+
+    fs = get_firestore_client()
+    if fs is not None:
+        fs.collection("tenants").document(tenant_id).set(new_tenant)
+        clear_cache()
+    else:
+        _get_store()["db_tenants"].append(new_tenant)
+
+    return _hydrate_tenant(new_tenant)
+
+
 def authenticate_seller(tenant_name: str, password: str) -> dict[str, Any] | None:
     """Memverifikasi login Penjual berdasarkan Nama Kios (case-insensitive) & Password."""
     init_db()
@@ -1074,6 +1142,32 @@ def update_tenant_image(
     for tenant in _get_store()["db_tenants"]:
         if tenant["id"] == tenant_id:
             tenant["image_url"] = data_uri
+            return data_uri
+    raise ValueError(f"Kios dengan id '{tenant_id}' tidak ditemukan.")
+
+
+def update_tenant_qris(
+    tenant_id: str, qris_bytes: bytes, filename: str
+) -> str:
+    """Mengompres (ketajaman tinggi agar mudah discan) & menyimpan QRIS asli kios."""
+    init_db()
+    compressed_bytes, compressed_name = compress_payment_image(
+        qris_bytes, filename, max_width=800, quality=88
+    )
+    data_uri = bytes_to_base64_data_uri(compressed_bytes, compressed_name)
+
+    fs = get_firestore_client()
+    if fs is not None:
+        doc_ref = fs.collection("tenants").document(tenant_id)
+        if not doc_ref.get().exists:
+            raise ValueError(f"Kios dengan id '{tenant_id}' tidak ditemukan.")
+        doc_ref.update({"qris_image_b64": data_uri})
+        clear_cache()
+        return data_uri
+
+    for tenant in _get_store()["db_tenants"]:
+        if tenant["id"] == tenant_id:
+            tenant["qris_image_b64"] = data_uri
             return data_uri
     raise ValueError(f"Kios dengan id '{tenant_id}' tidak ditemukan.")
 

@@ -1,4 +1,4 @@
-"""Sandbox UI/UX mandiri untuk GoFood Kancil (Tema Putih-Abu Minimalis).
+"""Sandbox UI/UX mandiri untuk Pesan Kancil (Tema Putih-Abu Minimalis).
 
 File ini sengaja dipisahkan sepenuhnya dari ``main.py``, ``db_service.py``, dan
 ``auth_service.py`` supaya eksplorasi dan revisi desain dapat dilakukan dengan
@@ -125,7 +125,7 @@ def _monochrome_qris_svg(merchant_name: str, nmid: str) -> str:
 
 
 def inject_minimalist_css() -> None:
-    """Menyuntikkan CSS minimalis bertema putih dan abu-abu ala GoFood clean."""
+    """Menyuntikkan CSS minimalis bertema putih dan abu-abu ala Pesan Kancil clean."""
     st.markdown(
         """
         <style>
@@ -247,7 +247,7 @@ def inject_minimalist_css() -> None:
             border-color: #E4E4E7 !important;
         }
 
-        /* Komponen kartu gambar seragam ala GoFood */
+        /* Komponen kartu gambar seragam ala Pesan Kancil */
         .gf-card-media {
             position: relative;
             width: 100%;
@@ -621,12 +621,12 @@ def _cart_delta(menu_id: str, delta: int) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Layar 1: Etalase Kios & Menu Makanan (Gaya GoFood Putih-Abu)
+# Layar 1: Etalase Kios & Menu Makanan (Gaya Pesan Kancil Putih-Abu)
 # ---------------------------------------------------------------------------
 
 
 def _render_Floating_cart_bar() -> None:
-    """Bar ringkas ala GoFood ketika ada item aktif di dalam keranjang."""
+    """Bar ringkas ala Pesan Kancil ketika ada item aktif di dalam keranjang."""
     cart = st.session_state["pv_cart"]
     if not cart["items"] or not cart["tenant_id"]:
         return
@@ -755,7 +755,7 @@ def _render_storefront_screen() -> None:
         st.session_state["pv_selected_tenant"] = None
         st.rerun()
 
-    # Header Kios bergaya GoFood Merchant Header
+    # Header Kios bergaya Pesan Kancil Merchant Header
     with st.container(border=True):
         h_img, h_info = st.columns([1.1, 2.9])
         with h_img:
@@ -1233,7 +1233,7 @@ def _render_login_screen() -> None:
     with center_col:
         with st.container(border=True):
             st.markdown(
-                "<h3 style='margin-bottom:2px;font-weight:700;letter-spacing:-0.02em;'>GoFood Kancil</h3>"
+                "<h3 style='margin-bottom:2px;font-weight:700;letter-spacing:-0.02em;'>Pesan Kancil</h3>"
                 "<p style='color:#71717A;font-size:13.5px;margin-bottom:16px;'>"
                 "Pesan makanan kantin fakultas tanpa antre.</p>",
                 unsafe_allow_html=True,
@@ -1289,7 +1289,7 @@ def _on_nav_change() -> None:
 
 def main() -> None:
     st.set_page_config(
-        page_title="UI Preview — GoFood Kancil",
+        page_title="UI Preview — Pesan Kancil",
         layout="wide",
         initial_sidebar_state="collapsed",
     )
@@ -1298,7 +1298,7 @@ def main() -> None:
 
     st.markdown(
         "<div style='padding-bottom:6px;'>"
-        "<span style='font-size:22px;font-weight:700;letter-spacing:-0.025em;'>GoFood Kancil</span>"
+        "<span style='font-size:22px;font-weight:700;letter-spacing:-0.025em;'>Pesan Kancil</span>"
         "<span style='font-size:12px;color:#71717A;margin-left:8px;'>UI Preview</span>"
         "</div>",
         unsafe_allow_html=True,

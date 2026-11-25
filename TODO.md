@@ -1,4 +1,4 @@
-## Fitur Utama (GoFood Kancil — Queue Kantin Online):
+## Fitur Utama (Pesan Kancil):
 
 ### A. MVP — Role Pembeli (Mahasiswa)
 - [x] **Autentikasi Hybrid (SSO UI CAS 2.0 + Akun NPM/Password):** Tombol login resmi `sso.ui.ac.id/cas2` (`serviceValidate` XML) + registrasi/login akun cadangan NPM & Password ter-hash (PBKDF2-SHA256) di koleksi `users`.

@@ -1,4 +1,4 @@
-"""Tampilan UI Role Pembeli (Mahasiswa) untuk GoFood Kancil — Tema Putih-Abu."""
+"""Tampilan UI Role Pembeli (Mahasiswa) untuk Pesan Kancil — Tema Putih-Abu."""
 
 from __future__ import annotations
 
@@ -68,7 +68,7 @@ def _on_buyer_nav_change() -> None:
 
 
 def _render_floating_cart_bar(tenants: list[dict[str, Any]]) -> None:
-    """Bar ringkas ala GoFood ketika ada item aktif di dalam keranjang."""
+    """Bar ringkas Pesan Kancil ketika ada item aktif di dalam keranjang."""
     cart = st.session_state["cart"]
     if not cart["items"] or not cart["tenant_id"]:
         return
@@ -421,8 +421,11 @@ def _render_checkout_screen(user: dict[str, Any]) -> None:
                 "</div>",
                 unsafe_allow_html=True,
             )
-            st.image(tenant["qris_svg"], width=240)
-            st.caption(f"NMID: `{tenant['nmid']}`")
+            st.image(db_service.get_tenant_qris_display(tenant), width=260)
+            if tenant.get("qris_image_b64"):
+                st.caption(f"QRIS resmi {tenant['name']}")
+            else:
+                st.caption(f"NMID: `{tenant['nmid']}`")
 
             uploaded_file = st.file_uploader(
                 "Unggah bukti pembayaran QRIS (PNG / JPG)",

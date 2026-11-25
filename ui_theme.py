@@ -1,4 +1,4 @@
-"""Sistem desain minimalis putih-abu bersama untuk GoFood Kancil."""
+"""Sistem desain minimalis putih-abu bersama untuk Pesan Kancil."""
 
 from __future__ import annotations
 
@@ -88,35 +88,39 @@ def render_media_html(
 
 
 def render_status_text_html(status: str, rejection_reason: str = "") -> str:
-    """Merender status pesanan sebagai teks deskriptif besar tanpa persentase."""
-    headline, sub = {
+    """Merender status pesanan deskriptif dengan persentase progress dan warna semantik."""
+    headline, sub, tone_cls = {
         db_service.STATUS_PENDING_PAYMENT: (
-            "Pembayaran sedang dikonfirmasi",
+            "0% · Pembayaran sedang dikonfirmasi",
             "Penjual sedang memeriksa bukti pembayaran yang kamu kirim.",
+            "is-pending",
         ),
         db_service.STATUS_PREPARING: (
-            "Pesanan sedang disiapkan",
+            "50% · Pesanan sedang disiapkan",
             "Pembayaran sudah dikonfirmasi, kios sedang menyiapkan pesananmu.",
+            "is-preparing",
         ),
         db_service.STATUS_READY: (
-            "Pesanan sudah bisa diambil",
+            "100% · Pesanan sudah bisa diambil",
             "Tunjukkan nomor antrean ini di konter kios.",
+            "is-ready",
         ),
         db_service.STATUS_REJECTED: (
             "Pembayaran ditolak",
             rejection_reason.strip()
             or "Bukti pembayaran tidak sesuai. Silakan hubungi konter kios.",
+            "is-rejected",
         ),
-    }.get(status, (status, ""))
-    muted = " is-muted" if status == db_service.STATUS_REJECTED else ""
+    }.get(status, (status, "", ""))
+    cls_suffix = f" {tone_cls}" if tone_cls else ""
     return (
-        f'<p class="gf-status-text{muted}">{html.escape(headline)}</p>'
+        f'<p class="gf-status-text{cls_suffix}">{html.escape(headline)}</p>'
         f'<p class="gf-status-sub">{html.escape(sub)}</p>'
     )
 
 
 def inject_minimalist_css() -> None:
-    """Menyuntikkan CSS minimalis bertema putih dan abu-abu ala GoFood clean."""
+    """Menyuntikkan CSS minimalis bertema putih dan abu-abu untuk Pesan Kancil."""
     st.markdown(
         """
         <style>
@@ -171,7 +175,7 @@ def inject_minimalist_css() -> None:
             box-shadow: none !important;
         }
 
-        /* Teks status antrean besar & deskriptif */
+        /* Teks status antrean besar, deskriptif, & berwarna sesuai progress */
         .gf-status-text {
             font-size: 22px;
             font-weight: 650;
@@ -180,12 +184,15 @@ def inject_minimalist_css() -> None:
             line-height: 1.3;
             margin: 14px 0 2px 0;
         }
+        .gf-status-text.is-pending { color: #B45309; }
+        .gf-status-text.is-preparing { color: #0071E3; }
+        .gf-status-text.is-ready { color: #15803D; }
+        .gf-status-text.is-rejected { color: #DC2626; }
         .gf-status-sub {
             font-size: 14px;
             color: #71717A;
             margin: 0 0 4px 0;
         }
-        .gf-status-text.is-muted { color: #52525B; }
 
         /* Kartu permukaan putih dengan border abu tipis & bayangan lembut */
         [data-testid="stVerticalBlockBorderWrapper"] {
@@ -241,7 +248,26 @@ def inject_minimalist_css() -> None:
             border-color: #E4E4E7 !important;
         }
 
-        /* Komponen kartu gambar seragam ala GoFood */
+        /* Tombol khusus Masuk dengan SSO UI warna kuning resmi UI */
+        .st-key-sso_ui_btn a[kind="primary"],
+        .st-key-sso_ui_btn a {
+            background-color: #FFCC00 !important;
+            color: #18181B !important;
+            border: 1px solid #E5B800 !important;
+            font-weight: 600 !important;
+        }
+        .st-key-sso_ui_btn a p,
+        .st-key-sso_ui_btn a span {
+            color: #18181B !important;
+        }
+        .st-key-sso_ui_btn a[kind="primary"]:hover,
+        .st-key-sso_ui_btn a:hover {
+            background-color: #F2C200 !important;
+            border-color: #D4A900 !important;
+            color: #18181B !important;
+        }
+
+        /* Komponen kartu gambar seragam Pesan Kancil */
         .gf-card-media {
             position: relative;
             width: 100%;

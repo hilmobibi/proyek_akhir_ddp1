@@ -1,4 +1,4 @@
-"""Modul autentikasi GoFood Kancil: Password Hashing (PBKDF2) & CAS 2.0 SSO UI.
+"""Modul autentikasi Pesan Kancil: Password Hashing (PBKDF2) & CAS 2.0 SSO UI.
 
 Mendukung:
 1. Hashing & verifikasi password aman menggunakan ``hashlib.pbkdf2_hmac`` (SHA-256)
