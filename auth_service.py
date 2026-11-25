@@ -67,12 +67,13 @@ def _normalize_service_url(url: str) -> str:
 
 
 def get_app_service_url() -> str:
-    """Mengambil URL layanan aplikasi untuk callback SSO UI.
+    """Mengambil URL layanan aplikasi untuk callback SSO UI secara otomatis.
 
     Urutan prioritas:
     1. Environment variable ``APP_SERVICE_URL``
-    2. ``st.secrets["APP_SERVICE_URL"]`` (untuk deployment Streamlit Cloud)
-    3. Default lokal ``http://localhost:8501/``
+    2. ``st.secrets["APP_SERVICE_URL"]`` (top-level atau di dalam ``[firebase]``)
+    3. Deteksi otomatis URL aktif browser dari ``st.context.url`` / header ``Host``
+    4. Default lokal ``http://localhost:8501/``
     """
     env_url = os.environ.get("APP_SERVICE_URL", "").strip()
     if env_url:
@@ -83,8 +84,26 @@ def get_app_service_url() -> str:
 
         if getattr(st, "runtime", None) is not None and st.runtime.exists():
             secret_url = str(st.secrets.get("APP_SERVICE_URL", "")).strip()
+            if not secret_url and "firebase" in st.secrets:
+                secret_url = str(
+                    st.secrets["firebase"].get("APP_SERVICE_URL", "")
+                ).strip()
             if secret_url:
                 return _normalize_service_url(secret_url)
+
+            ctx = getattr(st, "context", None)
+            if ctx is not None:
+                ctx_url = str(getattr(ctx, "url", "") or "").strip()
+                if ctx_url.startswith(("http://", "https://")):
+                    return _normalize_service_url(ctx_url)
+                host = str(ctx.headers.get("Host", "") or "").strip()
+                if host:
+                    scheme = (
+                        "http"
+                        if host.startswith(("localhost", "127.0.0.1"))
+                        else "https"
+                    )
+                    return _normalize_service_url(f"{scheme}://{host}/")
     except Exception:
         pass
 
