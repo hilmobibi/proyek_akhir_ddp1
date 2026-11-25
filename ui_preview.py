@@ -11,10 +11,14 @@ Jalankan dengan:
 from __future__ import annotations
 
 import base64
+from functools import lru_cache
 import html
+from pathlib import Path
 from typing import Any
 
 import streamlit as st
+
+PROJECT_DIR = Path(__file__).resolve().parent
 
 SCREEN_STOREFRONT = "Etalase & Menu"
 SCREEN_CART = "Keranjang & QRIS"
@@ -31,6 +35,23 @@ STATUS_REJECT = "Pembayaran Ditolak"
 def format_rp(amount: int) -> str:
     """Memformat integer menjadi nominal Rupiah (contoh: Rp15.000)."""
     return f"Rp{amount:,}".replace(",", ".")
+
+
+@lru_cache(maxsize=64)
+def _resolve_image_src(image_ref: str) -> str:
+    """Mengubah path file lokal menjadi data URI agar bisa dipakai di tag <img>.
+
+    Pada aplikasi final, nilai ini berasal dari foto yang diunggah penjual.
+    URL http(s) dan data URI dikembalikan apa adanya.
+    """
+    if not image_ref or image_ref.startswith(("http://", "https://", "data:")):
+        return image_ref
+    file_path = PROJECT_DIR / image_ref
+    if not file_path.is_file():
+        return ""
+    mime = "image/png" if file_path.suffix.lower() == ".png" else "image/jpeg"
+    encoded = base64.b64encode(file_path.read_bytes()).decode("ascii")
+    return f"data:{mime};base64,{encoded}"
 
 
 def _placeholder_svg_uri(label: str) -> str:
@@ -119,9 +140,62 @@ def inject_minimalist_css() -> None:
         [data-testid="stDecoration"] { display: none; }
         .block-container {
             max-width: 1060px !important;
-            padding-top: 1.8rem !important;
-            padding-bottom: 4rem !important;
+            padding-top: 3.2rem !important;
+            padding-bottom: 7rem !important;
         }
+
+        /* Navigasi melayang menempel di bawah layar (selalu 1 baris) */
+        .st-key-bottom_nav {
+            position: fixed;
+            bottom: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            width: min(640px, calc(100vw - 24px));
+            background: rgba(255, 255, 255, 0.94);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid #E4E4E7;
+            border-radius: 999px;
+            padding: 6px 8px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            overflow-x: auto;
+        }
+        .st-key-bottom_nav [data-testid="stVerticalBlockBorderWrapper"] {
+            border: none !important;
+            box-shadow: none !important;
+        }
+        .st-key-bottom_nav [data-baseweb="button-group"] {
+            flex-wrap: nowrap !important;
+        }
+        .st-key-bottom_nav button {
+            white-space: nowrap !important;
+            font-size: 13px !important;
+            padding-left: 12px !important;
+            padding-right: 12px !important;
+            box-shadow: none !important;
+        }
+        .st-key-bottom_nav button:focus,
+        .st-key-bottom_nav button:focus-visible {
+            outline: none !important;
+            box-shadow: none !important;
+        }
+
+        /* Teks status antrean besar & deskriptif */
+        .gf-status-text {
+            font-size: 22px;
+            font-weight: 650;
+            letter-spacing: -0.02em;
+            color: #18181B;
+            line-height: 1.3;
+            margin: 14px 0 2px 0;
+        }
+        .gf-status-sub {
+            font-size: 14px;
+            color: #71717A;
+            margin: 0 0 4px 0;
+        }
+        .gf-status-text.is-muted { color: #52525B; }
 
         /* Kartu permukaan putih dengan border abu tipis & bayangan lembut */
         [data-testid="stVerticalBlockBorderWrapper"] {
@@ -273,32 +347,6 @@ def inject_minimalist_css() -> None:
             color: #3F3F46;
             margin-bottom: 12px;
         }
-        .gf-stepper-Track {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 8px;
-            margin: 14px 0 10px 0;
-        }
-        .gf-step-item {
-            padding: 10px 12px;
-            border-radius: 10px;
-            border: 1px solid #E4E4E7;
-            background: #FAFAFA;
-            font-size: 12px;
-            color: #71717A;
-        }
-        .gf-step-item.active {
-            background: #18181B;
-            color: #FFFFFF;
-            border-color: #18181B;
-            font-weight: 600;
-        }
-        .gf-step-item.done {
-            background: #F4F4F5;
-            color: #18181B;
-            border-color: #D4D4D8;
-            font-weight: 500;
-        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -318,7 +366,7 @@ def _init_preview_data() -> None:
                 "description": "Ayam krispi sambal bawang ulek dadakan, nasi hangat, dan minuman dingin.",
                 "is_open": True,
                 "nmid": "ID102030400001",
-                "image_url": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=700&q=80",
+                "image_url": "assets/demo/t1.jpg",
             },
             {
                 "id": "t2",
@@ -329,7 +377,7 @@ def _init_preview_data() -> None:
                 "description": "Kuah kaldu ayam kampung hangat, bakso urat sapi asli, dan gorengan renyah.",
                 "is_open": True,
                 "nmid": "ID102030400002",
-                "image_url": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=700&q=80",
+                "image_url": "assets/demo/t2.jpg",
             },
             {
                 "id": "t3",
@@ -340,7 +388,7 @@ def _init_preview_data() -> None:
                 "description": "Mie ayam jamur racikan sendiri, nasi goreng kampung, dan kwetiau sapi.",
                 "is_open": False,
                 "nmid": "ID102030400003",
-                "image_url": "https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&w=700&q=80",
+                "image_url": "assets/demo/t3.jpg",
             },
         ]
 
@@ -353,7 +401,7 @@ def _init_preview_data() -> None:
                 "price": 15000,
                 "description": "Ayam goreng tepung krispi digeprek sambal bawang segar plus nasi putih hangat.",
                 "is_available": True,
-                "image_url": "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?auto=format&fit=crop&w=640&q=80",
+                "image_url": "assets/demo/m1.jpg",
             },
             {
                 "id": "m2",
@@ -362,7 +410,7 @@ def _init_preview_data() -> None:
                 "price": 18000,
                 "description": "Ayam geprek pedas gurih dengan lapisan keju mozarella leleh di atasnya.",
                 "is_available": True,
-                "image_url": "https://images.unsplash.com/photo-1562967914-608f82629710?auto=format&fit=crop&w=640&q=80",
+                "image_url": "assets/demo/m2.jpg",
             },
             {
                 "id": "m3",
@@ -371,7 +419,7 @@ def _init_preview_data() -> None:
                 "price": 13000,
                 "description": "Mie goreng bumbu gurih disajikan dengan telur mata sapi setengah matang.",
                 "is_available": False,
-                "image_url": "https://images.unsplash.com/photo-1585032226651-759b368d7246?auto=format&fit=crop&w=640&q=80",
+                "image_url": "assets/demo/m3.jpg",
             },
             {
                 "id": "m4",
@@ -380,7 +428,7 @@ def _init_preview_data() -> None:
                 "price": 4000,
                 "description": "Teh melati seduh segar dengan es batu kristal ukuran gelas besar.",
                 "is_available": True,
-                "image_url": "https://images.unsplash.com/photo-1556679343-c7306c1976bc?auto=format&fit=crop&w=640&q=80",
+                "image_url": "assets/demo/m4.jpg",
             },
             {
                 "id": "m5",
@@ -389,7 +437,7 @@ def _init_preview_data() -> None:
                 "price": 14000,
                 "description": "Soto ayam bening tabur bubuk koya gurih, suwiran ayam, telur, dan nasi.",
                 "is_available": True,
-                "image_url": "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=640&q=80",
+                "image_url": "assets/demo/m5.jpg",
             },
             {
                 "id": "m6",
@@ -398,7 +446,7 @@ def _init_preview_data() -> None:
                 "price": 16000,
                 "description": "Satu bakso urat besar, tiga bakso halus, bihun, mie kuning, dan sawi hijau.",
                 "is_available": True,
-                "image_url": "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=640&q=80",
+                "image_url": "assets/demo/m6.jpg",
             },
             {
                 "id": "m7",
@@ -407,7 +455,7 @@ def _init_preview_data() -> None:
                 "price": 7000,
                 "description": "Potongan tahu putih goreng tepung renyah dengan taburan bawang putih.",
                 "is_available": False,
-                "image_url": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=640&q=80",
+                "image_url": "assets/demo/m7.jpg",
             },
             {
                 "id": "m8",
@@ -416,7 +464,7 @@ def _init_preview_data() -> None:
                 "price": 5000,
                 "description": "Perasan jeruk manis segar dingin tanpa tambahan pemanis buatan.",
                 "is_available": True,
-                "image_url": "https://images.unsplash.com/photo-1613478223719-2ab802602423?auto=format&fit=crop&w=640&q=80",
+                "image_url": "assets/demo/m8.jpg",
             },
             {
                 "id": "m9",
@@ -425,7 +473,7 @@ def _init_preview_data() -> None:
                 "price": 15000,
                 "description": "Mie telur kenyal dengan potongan ayam kecap jamur dan pangsit rebus.",
                 "is_available": True,
-                "image_url": "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=640&q=80",
+                "image_url": "assets/demo/m9.jpg",
             },
             {
                 "id": "m10",
@@ -434,7 +482,7 @@ def _init_preview_data() -> None:
                 "price": 16000,
                 "description": "Nasi goreng bumbu rempah tradisional dengan suwiran ayam dan kerupuk.",
                 "is_available": True,
-                "image_url": "https://images.unsplash.com/photo-1603133872878-684f208fb84b?auto=format&fit=crop&w=640&q=80",
+                "image_url": "assets/demo/m10.jpg",
             },
         ]
 
@@ -450,14 +498,14 @@ def _init_preview_data() -> None:
                     "name": "Paket Ayam Geprek Sambal Bawang",
                     "price": 15000,
                     "qty": 1,
-                    "image_url": "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?auto=format&fit=crop&w=640&q=80",
+                    "image_url": "assets/demo/m1.jpg",
                 },
                 "m4": {
                     "menu_id": "m4",
                     "name": "Es Teh Melati Dingin",
                     "price": 4000,
                     "qty": 1,
-                    "image_url": "https://images.unsplash.com/photo-1556679343-c7306c1976bc?auto=format&fit=crop&w=640&q=80",
+                    "image_url": "assets/demo/m4.jpg",
                 },
             },
         }
@@ -516,7 +564,7 @@ def _render_media_html(
 ) -> str:
     """Membangun blok HTML gambar rasio 16:10 seragam dengan fallback monokrom."""
     fallback_uri = _placeholder_svg_uri(alt_label)
-    safe_url = html.escape(image_url or fallback_uri)
+    safe_url = html.escape(_resolve_image_src(image_url) or fallback_uri)
     safe_alt = html.escape(alt_label)
     dim_cls = " is-dimmed" if dimmed else ""
 
@@ -946,25 +994,30 @@ def _render_cart_screen() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _render_stepper_html(status: str) -> str:
-    """Merender indikator 3 tahapan pesanan bergaya minimalis putih-abu-hitam."""
-    if status == STATUS_REJECT:
-        return (
-            '<div class="gf-surface-note" style="border-color:#D4D4D8;background:#FAFAFA;">'
-            "<b>Status: Pembayaran Ditolak</b> — Bukti pembayaran tidak sesuai. Silakan hubungi konter kios."
-            "</div>"
-        )
-
-    s1 = "active" if status == STATUS_PENDING else "done"
-    s2 = "active" if status == STATUS_PREP else ("done" if status == STATUS_READY else "")
-    s3 = "active" if status == STATUS_READY else ""
-
+def _render_status_text_html(status: str, reason: str = "") -> str:
+    """Merender status pesanan sebagai teks deskriptif besar tanpa persentase."""
+    headline, sub = {
+        STATUS_PENDING: (
+            "Pembayaran sedang dikonfirmasi",
+            "Penjual sedang memeriksa bukti pembayaran yang kamu kirim.",
+        ),
+        STATUS_PREP: (
+            "Pesanan sedang disiapkan",
+            "Pembayaran sudah dikonfirmasi, kios sedang menyiapkan pesananmu.",
+        ),
+        STATUS_READY: (
+            "Pesanan sudah bisa diambil",
+            "Tunjukkan nomor antrean ini di konter kios.",
+        ),
+        STATUS_REJECT: (
+            "Pembayaran ditolak",
+            reason or "Bukti pembayaran tidak sesuai. Silakan hubungi konter kios.",
+        ),
+    }.get(status, (status, ""))
+    muted = " is-muted" if status == STATUS_REJECT else ""
     return (
-        '<div class="gf-stepper-Track">'
-        f'<div class="gf-step-item {s1}">0% · Verifikasi Bayar</div>'
-        f'<div class="gf-step-item {s2}">50% · Sedang Disiapkan</div>'
-        f'<div class="gf-step-item {s3}">100% · Siap Diambil</div>'
-        "</div>"
+        f'<p class="gf-status-text{muted}">{html.escape(headline)}</p>'
+        f'<p class="gf-status-sub">{html.escape(sub)}</p>'
     )
 
 
@@ -996,7 +1049,12 @@ def _render_queue_screen() -> None:
                 if order["notes"]:
                     st.caption(f"Catatan: {order['notes']}")
 
-            st.markdown(_render_stepper_html(order["status"]), unsafe_allow_html=True)
+            st.markdown(
+                _render_status_text_html(
+                    order["status"], order.get("rejection_reason", "")
+                ),
+                unsafe_allow_html=True,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -1221,6 +1279,14 @@ def _render_login_screen() -> None:
                 )
 
 
+def _on_nav_change() -> None:
+    """Callback klik navigasi bawah: simpan layar aktif yang dipilih pengguna."""
+    chosen = st.session_state.get("pv_bottom_nav_control")
+    if chosen:
+        st.session_state["pv_screen"] = chosen
+        st.session_state["pv_nav_synced"] = chosen
+
+
 def main() -> None:
     st.set_page_config(
         page_title="UI Preview — GoFood Kancil",
@@ -1230,36 +1296,40 @@ def main() -> None:
     inject_minimalist_css()
     _init_preview_data()
 
-    # Header utama + navigasi preview antar-layar
-    top_brand, top_nav = st.columns([1.15, 2.85])
-    with top_brand:
-        st.markdown(
-            "<div style='padding-top:4px;'>"
-            "<span style='font-size:20px;font-weight:700;letter-spacing:-0.025em;'>GoFood Kancil</span>"
-            "<span style='font-size:12px;color:#71717A;margin-left:8px;'>UI Preview</span>"
-            "</div>",
-            unsafe_allow_html=True,
-        )
-    with top_nav:
-        selected = st.segmented_control(
+    st.markdown(
+        "<div style='padding-bottom:6px;'>"
+        "<span style='font-size:22px;font-weight:700;letter-spacing:-0.025em;'>GoFood Kancil</span>"
+        "<span style='font-size:12px;color:#71717A;margin-left:8px;'>UI Preview</span>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    # Sinkronkan widget navigasi bila layar diganti lewat kode (mis. tombol
+    # "Lanjut ke Keranjang"), lalu biarkan klik pengguna ditangani callback.
+    if st.session_state.get("pv_nav_synced") != st.session_state["pv_screen"]:
+        st.session_state["pv_bottom_nav_control"] = st.session_state["pv_screen"]
+        st.session_state["pv_nav_synced"] = st.session_state["pv_screen"]
+
+    # Navigasi preview antar-layar: melayang menempel di bawah layar (1 baris)
+    nav_short_labels = {
+        SCREEN_STOREFRONT: "Etalase",
+        SCREEN_CART: "Keranjang",
+        SCREEN_QUEUE: "Antrean",
+        SCREEN_SELLER: "Penjual",
+        SCREEN_LOGIN: "Masuk",
+    }
+    with st.container(key="bottom_nav"):
+        st.segmented_control(
             "Layar Preview",
-            options=[
-                SCREEN_STOREFRONT,
-                SCREEN_CART,
-                SCREEN_QUEUE,
-                SCREEN_SELLER,
-                SCREEN_LOGIN,
-            ],
-            default=st.session_state["pv_screen"],
+            options=list(nav_short_labels.keys()),
+            format_func=lambda s: nav_short_labels[s],
             required=True,
+            wrap=False,
             label_visibility="collapsed",
             width="stretch",
+            key="pv_bottom_nav_control",
+            on_change=_on_nav_change,
         )
-        if selected and selected != st.session_state["pv_screen"]:
-            st.session_state["pv_screen"] = selected
-            st.rerun()
-
-    st.divider()
 
     active = st.session_state["pv_screen"]
     if active == SCREEN_STOREFRONT:

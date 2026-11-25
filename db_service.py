@@ -157,7 +157,7 @@ def clear_cache() -> None:
 
 
 def generate_qris_svg_data_uri(
-    merchant_name: str, nmid: str, accent_color: str = "#E11D48"
+    merchant_name: str, nmid: str, accent_color: str = "#18181B"
 ) -> str:
     """Membuat gambar kartu QRIS berbasis SVG XML untuk masing-masing kios."""
     safe_name = html.escape(merchant_name)
@@ -311,6 +311,69 @@ def _hydrate_order(doc_dict: dict[str, Any]) -> dict[str, Any]:
     return hydrated
 
 
+_DEFAULT_TENANT_META: dict[str, dict[str, str]] = {
+    "t1": {
+        "category": "Ayam & Sambal",
+        "eta": "8-12 mnt",
+        "image_url": "assets/demo/t1.jpg",
+    },
+    "t2": {
+        "category": "Berkuah & Bakso",
+        "eta": "5-10 mnt",
+        "image_url": "assets/demo/t2.jpg",
+    },
+    "t3": {
+        "category": "Mie & Nasi Goreng",
+        "eta": "10-15 mnt",
+        "image_url": "assets/demo/t3.jpg",
+    },
+}
+
+_DEFAULT_MENU_IMAGES: dict[str, str] = {
+    "m1": "assets/demo/m1.jpg",
+    "m2": "assets/demo/m2.jpg",
+    "m3": "assets/demo/m3.jpg",
+    "m4": "assets/demo/m4.jpg",
+    "m5": "assets/demo/m5.jpg",
+    "m6": "assets/demo/m6.jpg",
+    "m7": "assets/demo/m7.jpg",
+    "m8": "assets/demo/m8.jpg",
+    "m9": "assets/demo/m9.jpg",
+    "m10": "assets/demo/m10.jpg",
+    "m11": "assets/demo/m3.jpg",
+    "m12": "assets/demo/m4.jpg",
+}
+
+
+def _hydrate_tenant(doc_dict: dict[str, Any]) -> dict[str, Any]:
+    """Melengkapi field visual default kios bila dokumen Firestore lama belum memilikinya."""
+    hydrated = dict(doc_dict)
+    defaults = _DEFAULT_TENANT_META.get(hydrated.get("id", ""), {})
+    if not hydrated.get("image_url"):
+        hydrated["image_url"] = defaults.get("image_url", "")
+    if not hydrated.get("category"):
+        hydrated["category"] = defaults.get("category", "Kios Kantin")
+    if not hydrated.get("eta"):
+        hydrated["eta"] = defaults.get("eta", "5-10 mnt")
+    # Pastikan QRIS selalu bertema monokrom bersih
+    hydrated["qris_svg"] = generate_qris_svg_data_uri(
+        hydrated.get("name", "Kios Kantin"),
+        hydrated.get("nmid", "ID102030400000"),
+        "#18181B",
+    )
+    return hydrated
+
+
+def _hydrate_menu(doc_dict: dict[str, Any]) -> dict[str, Any]:
+    """Melengkapi field foto default menu bila dokumen Firestore lama belum memilikinya."""
+    hydrated = dict(doc_dict)
+    if not hydrated.get("image_url"):
+        hydrated["image_url"] = _DEFAULT_MENU_IMAGES.get(
+            hydrated.get("id", ""), ""
+        )
+    return hydrated
+
+
 def _build_seed_tenants() -> list[dict[str, Any]]:
     """Membangun data awal 3 kios kantin dengan password ter-hash."""
     default_pw_hash = auth_service.hash_password(
@@ -320,6 +383,9 @@ def _build_seed_tenants() -> list[dict[str, Any]]:
         {
             "id": "t1",
             "name": "Kantin Ayam Geprek Mas Budi",
+            "category": "Ayam & Sambal",
+            "eta": "8-12 mnt",
+            "image_url": "assets/demo/t1.jpg",
             "emoji": "",
             "password_hash": default_pw_hash,
             "description": "Spesialis ayam geprek sambal bawang, tahu tempe, dan es segar.",
@@ -329,12 +395,15 @@ def _build_seed_tenants() -> list[dict[str, Any]]:
             "order_seq_date": "",
             "nmid": "ID102030400001",
             "qris_svg": generate_qris_svg_data_uri(
-                "Ayam Geprek Mas Budi", "ID102030400001", "#DC2626"
+                "Ayam Geprek Mas Budi", "ID102030400001", "#18181B"
             ),
         },
         {
             "id": "t2",
             "name": "Soto & Bakso Bu Sari",
+            "category": "Berkuah & Bakso",
+            "eta": "5-10 mnt",
+            "image_url": "assets/demo/t2.jpg",
             "emoji": "",
             "password_hash": default_pw_hash,
             "description": "Soto ayam bening, bakso urat, dan minuman hangat/dingin.",
@@ -344,12 +413,15 @@ def _build_seed_tenants() -> list[dict[str, Any]]:
             "order_seq_date": "",
             "nmid": "ID102030400002",
             "qris_svg": generate_qris_svg_data_uri(
-                "Soto & Bakso Bu Sari", "ID102030400002", "#059669"
+                "Soto & Bakso Bu Sari", "ID102030400002", "#18181B"
             ),
         },
         {
             "id": "t3",
             "name": "Mie Ayam & Nasgor Pakde",
+            "category": "Mie & Nasi Goreng",
+            "eta": "10-15 mnt",
+            "image_url": "assets/demo/t3.jpg",
             "emoji": "",
             "password_hash": default_pw_hash,
             "description": "Mie ayam jamur, nasi goreng kampung, dan kwetiau goreng.",
@@ -359,7 +431,7 @@ def _build_seed_tenants() -> list[dict[str, Any]]:
             "order_seq_date": "",
             "nmid": "ID102030400003",
             "qris_svg": generate_qris_svg_data_uri(
-                "Mie Ayam Pakde", "ID102030400003", "#D97706"
+                "Mie Ayam Pakde", "ID102030400003", "#18181B"
             ),
         },
     ]
@@ -517,7 +589,7 @@ def _fetch_tenants_firestore() -> list[dict[str, Any]]:
     fs = get_firestore_client()
     if fs is None:
         return []
-    docs = [doc.to_dict() for doc in fs.collection("tenants").stream()]
+    docs = [_hydrate_tenant(doc.to_dict()) for doc in fs.collection("tenants").stream()]
     return sorted(docs, key=lambda d: str(d.get("id", "")))
 
 
@@ -531,7 +603,7 @@ def _fetch_menus_firestore(tenant_id: str) -> list[dict[str, Any]]:
     query = fs.collection("menus").where(
         filter=FieldFilter("tenant_id", "==", tenant_id)
     )
-    docs = [doc.to_dict() for doc in query.stream()]
+    docs = [_hydrate_menu(doc.to_dict()) for doc in query.stream()]
     return sorted(docs, key=lambda d: str(d.get("id", "")))
 
 
@@ -549,7 +621,7 @@ def get_tenants() -> list[dict[str, Any]]:
             return list(_cached_tenants())
         return _fetch_tenants_firestore()
 
-    return list(_get_store()["db_tenants"])
+    return [_hydrate_tenant(t) for t in _get_store()["db_tenants"]]
 
 
 def get_tenant_by_id(tenant_id: str) -> dict[str, Any] | None:
@@ -575,7 +647,9 @@ def get_menus_by_tenant(tenant_id: str) -> list[dict[str, Any]]:
         return _fetch_menus_firestore(tenant_id)
 
     return [
-        menu for menu in _get_store()["db_menus"] if menu["tenant_id"] == tenant_id
+        _hydrate_menu(menu)
+        for menu in _get_store()["db_menus"]
+        if menu["tenant_id"] == tenant_id
     ]
 
 
@@ -978,6 +1052,32 @@ def toggle_tenant_open(tenant_id: str, is_open: bool) -> bool:
     return False
 
 
+def update_tenant_image(
+    tenant_id: str, image_bytes: bytes, filename: str
+) -> str:
+    """Mengompres dan menyimpan foto kios baru milik penjual ke database."""
+    init_db()
+    compressed_bytes, compressed_name = compress_payment_image(
+        image_bytes, filename, max_width=640, quality=76
+    )
+    data_uri = bytes_to_base64_data_uri(compressed_bytes, compressed_name)
+
+    fs = get_firestore_client()
+    if fs is not None:
+        doc_ref = fs.collection("tenants").document(tenant_id)
+        if not doc_ref.get().exists:
+            raise ValueError(f"Kios dengan id '{tenant_id}' tidak ditemukan.")
+        doc_ref.update({"image_url": data_uri})
+        clear_cache()
+        return data_uri
+
+    for tenant in _get_store()["db_tenants"]:
+        if tenant["id"] == tenant_id:
+            tenant["image_url"] = data_uri
+            return data_uri
+    raise ValueError(f"Kios dengan id '{tenant_id}' tidak ditemukan.")
+
+
 def _validate_menu_fields(name: str, price: int) -> tuple[str, int]:
     """Memvalidasi nama dan harga menu agar seragam saat tambah maupun edit."""
     clean_name = name.strip()
@@ -996,6 +1096,7 @@ def add_menu(
     description: str,
     emoji: str = "",
     is_available: bool = True,
+    image_url: str = "",
 ) -> dict[str, Any]:
     """Menambahkan menu baru ke daftar menu milik suatu kios."""
     init_db()
@@ -1011,6 +1112,7 @@ def add_menu(
         "emoji": emoji.strip(),
         "description": description.strip(),
         "is_available": bool(is_available),
+        "image_url": image_url.strip(),
     }
 
     fs = get_firestore_client()
@@ -1030,8 +1132,9 @@ def update_menu(
     description: str,
     emoji: str,
     is_available: bool,
+    image_url: str | None = None,
 ) -> bool:
-    """Memperbarui detail menu yang sudah ada."""
+    """Memperbarui detail menu yang sudah ada (termasuk foto bila diunggah)."""
     clean_name, parsed_price = _validate_menu_fields(name, price)
     clean_emoji = emoji.strip()
 
@@ -1041,15 +1144,16 @@ def update_menu(
         doc_ref = fs.collection("menus").document(menu_id)
         if not doc_ref.get().exists:
             return False
-        doc_ref.update(
-            {
-                "name": clean_name,
-                "price": parsed_price,
-                "description": description.strip(),
-                "emoji": clean_emoji,
-                "is_available": bool(is_available),
-            }
-        )
+        updates: dict[str, Any] = {
+            "name": clean_name,
+            "price": parsed_price,
+            "description": description.strip(),
+            "emoji": clean_emoji,
+            "is_available": bool(is_available),
+        }
+        if image_url is not None:
+            updates["image_url"] = image_url.strip()
+        doc_ref.update(updates)
         clear_cache()
         return True
 
@@ -1060,6 +1164,8 @@ def update_menu(
             menu["description"] = description.strip()
             menu["emoji"] = clean_emoji
             menu["is_available"] = bool(is_available)
+            if image_url is not None:
+                menu["image_url"] = image_url.strip()
             return True
     return False
 

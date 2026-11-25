@@ -1,13 +1,18 @@
-"""Tampilan UI Role Penjual (Kios Kantin) untuk GoFood Kancil (Queue Kantin Online)."""
+"""Tampilan UI Role Penjual (Kios Kantin) untuk GoFood Kancil — Tema Putih-Abu."""
 
 from __future__ import annotations
 
+import html
 from typing import Any
 
 import streamlit as st
 
-import buyer_view
 import db_service
+import ui_theme
+
+SELLER_NAV_ORDERS = "Pesanan"
+SELLER_NAV_MENUS = "Kelola Menu"
+SELLER_NAV_PROFILE = "Profil Kios"
 
 
 def _set_pending_action(order_id: str | None, action: str | None = None) -> None:
@@ -21,16 +26,12 @@ def _set_pending_action(order_id: str | None, action: str | None = None) -> None
         }
 
 
-def _render_order_status_badge(status: str) -> None:
-    """Merender badge status pesanan pada kolom kiri kartu antrean penjual."""
-    if status == db_service.STATUS_READY:
-        st.success("100% · Sudah Bisa Diambil")
-    elif status == db_service.STATUS_PREPARING:
-        st.warning("50% · Sedang Disiapkan")
-    elif status == db_service.STATUS_REJECTED:
-        st.error("Pembayaran Ditolak")
-    else:
-        st.info("0% · Menunggu Konfirmasi")
+def _on_seller_nav_change() -> None:
+    """Callback klik bottom navbar Penjual."""
+    chosen = st.session_state.get("seller_bottom_nav_ctrl")
+    if chosen:
+        st.session_state["seller_nav"] = chosen
+        st.session_state["seller_nav_synced"] = chosen
 
 
 def _render_order_actions(order: dict[str, Any]) -> None:
@@ -46,9 +47,9 @@ def _render_order_actions(order: dict[str, Any]) -> None:
 
     if status == db_service.STATUS_PENDING_PAYMENT:
         if active_action == "confirm_payment":
-            st.warning("Konfirmasi bukti QRIS sudah valid & nominal sesuai?")
+            st.caption("Konfirmasi bukti QRIS sudah valid & nominal sesuai?")
             if st.button(
-                "✅ Ya, Konfirmasi & Siapkan",
+                "Ya, Konfirmasi & Siapkan",
                 key=f"confirm_yes_{order_id}",
                 type="primary",
                 use_container_width=True,
@@ -57,21 +58,21 @@ def _render_order_actions(order: dict[str, Any]) -> None:
                 _set_pending_action(None)
                 st.rerun()
             if st.button(
-                "❌ Batal",
+                "Batal",
                 key=f"confirm_cancel_{order_id}",
                 use_container_width=True,
             ):
                 _set_pending_action(None)
                 st.rerun()
         elif active_action == "reject_payment":
-            st.error("Yakin ingin menolak bukti pembayaran pesanan ini?")
+            st.caption("Yakin ingin menolak bukti pembayaran pesanan ini?")
             reject_reason = st.text_input(
                 "Alasan Penolakan (Opsional)",
                 placeholder="Contoh: Nominal tidak sesuai / bukti buram",
                 key=f"reject_reason_{order_id}",
             )
             if st.button(
-                "🚫 Ya, Tolak Pesanan",
+                "Ya, Tolak Pesanan",
                 key=f"reject_yes_{order_id}",
                 type="primary",
                 use_container_width=True,
@@ -84,7 +85,7 @@ def _render_order_actions(order: dict[str, Any]) -> None:
                 _set_pending_action(None)
                 st.rerun()
             if st.button(
-                "❌ Batal",
+                "Batal",
                 key=f"reject_cancel_{order_id}",
                 use_container_width=True,
             ):
@@ -92,7 +93,7 @@ def _render_order_actions(order: dict[str, Any]) -> None:
                 st.rerun()
         else:
             if st.button(
-                "✅ Konfirmasi Pembayaran",
+                "Konfirmasi Pembayaran",
                 key=f"btn_confirm_pay_{order_id}",
                 type="primary",
                 use_container_width=True,
@@ -100,7 +101,7 @@ def _render_order_actions(order: dict[str, Any]) -> None:
                 _set_pending_action(order_id, "confirm_payment")
                 st.rerun()
             if st.button(
-                "❌ Tolak Pembayaran",
+                "Tolak Pembayaran",
                 key=f"btn_reject_pay_{order_id}",
                 type="secondary",
                 use_container_width=True,
@@ -110,9 +111,9 @@ def _render_order_actions(order: dict[str, Any]) -> None:
 
     elif status == db_service.STATUS_PREPARING:
         if active_action == "mark_ready":
-            st.warning("Pastikan pesanan sudah selesai & siap diambil di konter!")
+            st.caption("Pastikan pesanan sudah selesai & siap diambil di konter.")
             if st.button(
-                "🔔 Ya, Sudah Bisa Diambil",
+                "Ya, Sudah Bisa Diambil",
                 key=f"ready_yes_{order_id}",
                 type="primary",
                 use_container_width=True,
@@ -121,7 +122,7 @@ def _render_order_actions(order: dict[str, Any]) -> None:
                 _set_pending_action(None)
                 st.rerun()
             if st.button(
-                "❌ Batal",
+                "Batal",
                 key=f"ready_cancel_{order_id}",
                 use_container_width=True,
             ):
@@ -129,7 +130,7 @@ def _render_order_actions(order: dict[str, Any]) -> None:
                 st.rerun()
         else:
             if st.button(
-                "🔔 Tandai Pesanan Sudah Bisa Diambil",
+                "Tandai Sudah Bisa Diambil",
                 key=f"seller_ready_{order_id}",
                 type="primary",
                 use_container_width=True,
@@ -139,7 +140,7 @@ def _render_order_actions(order: dict[str, Any]) -> None:
 
     elif status == db_service.STATUS_READY:
         if st.button(
-            "↩️ Kembalikan ke Sedang Menyiapkan",
+            "Kembalikan ke Disiapkan",
             key=f"seller_prep_{order_id}",
             use_container_width=True,
         ):
@@ -151,8 +152,8 @@ def _render_order_actions(order: dict[str, Any]) -> None:
         st.caption("Pesanan ini telah ditolak.")
 
 
-def _render_orders_tab(tenant: dict[str, Any]) -> None:
-    """Merender Tab 1 Penjual: Dashboard antrean pesanan masuk secara berurutan (FIFO)."""
+def _render_orders_screen(tenant: dict[str, Any]) -> None:
+    """Merender layar Dashboard Antrean Pesanan Masuk Penjual."""
     orders = db_service.get_tenant_orders(tenant["id"])
 
     status_counts = {
@@ -168,20 +169,17 @@ def _render_orders_tab(tenant: dict[str, Any]) -> None:
     m1, m2, m3, m4, m5 = st.columns([1.1, 1.1, 1.1, 1.4, 0.9])
     with m1:
         st.metric(
-            "Menunggu Konfirmasi", status_counts[db_service.STATUS_PENDING_PAYMENT]
+            "Perlu Verifikasi", status_counts[db_service.STATUS_PENDING_PAYMENT]
         )
     with m2:
-        st.metric("Sedang Disiapkan", status_counts[db_service.STATUS_PREPARING])
+        st.metric("Disiapkan", status_counts[db_service.STATUS_PREPARING])
     with m3:
-        st.metric("Sudah Bisa Diambil", status_counts[db_service.STATUS_READY])
+        st.metric("Siap Diambil", status_counts[db_service.STATUS_READY])
     with m4:
-        st.metric(
-            "Pendapatan Terkonfirmasi",
-            buyer_view.format_rupiah(confirmed_revenue),
-        )
+        st.metric("Pendapatan", ui_theme.format_rupiah(confirmed_revenue))
     with m5:
         st.write("")
-        if st.button("🔄 Refresh Antrean", use_container_width=True):
+        if st.button("Perbarui", use_container_width=True):
             db_service.clear_cache()
             st.rerun()
 
@@ -196,7 +194,8 @@ def _render_orders_tab(tenant: dict[str, Any]) -> None:
         options=list(nav_labels.keys()),
         default=db_service.STATUS_PENDING_PAYMENT,
         required=True,
-        format_func=lambda status: f"{nav_labels[status]} ({status_counts[status]})",
+        wrap=False,
+        format_func=lambda s: f"{nav_labels[s]} ({status_counts[s]})",
         label_visibility="collapsed",
         width="stretch",
         key=f"seller_order_nav_{tenant['id']}",
@@ -205,41 +204,51 @@ def _render_orders_tab(tenant: dict[str, Any]) -> None:
         selected_status = db_service.STATUS_PENDING_PAYMENT
 
     filtered_orders = [o for o in orders if o["status"] == selected_status]
-
     if not filtered_orders:
-        st.info("Belum ada pesanan pada kategori antrean ini.")
+        st.markdown(
+            '<div class="gf-surface-note">Belum ada pesanan pada kategori status ini.</div>',
+            unsafe_allow_html=True,
+        )
         return
 
     for order in filtered_orders:
         with st.container(border=True):
-            left_col, mid_col, right_col = st.columns([1.1, 2.4, 1.5])
+            left_col, mid_col, right_col = st.columns([1.0, 2.5, 1.5])
             with left_col:
                 st.caption("Nomor Antrean")
-                st.markdown(f"# `#{order['queue_number']}`")
-                _render_order_status_badge(order["status"])
+                st.markdown(
+                    "<div style='font-size:28px;font-weight:700;letter-spacing:-0.03em;color:#18181B;'>"
+                    f"#{html.escape(order['queue_number'])}</div>",
+                    unsafe_allow_html=True,
+                )
+                st.caption(order["created_at"])
 
             with mid_col:
                 st.markdown(
                     f"#### {order['buyer_name']} (`{order['buyer_npm']}`)"
                 )
-                st.caption(
-                    f"{order['created_at']} · **{buyer_view.format_rupiah(int(order['total_price']))}** · {order['pickup_method']}"
-                )
                 for item in order["items"]:
                     st.markdown(
                         f"- **{item['name']}** × {item['qty']} "
-                        f"({buyer_view.format_rupiah(int(item['price']) * int(item['qty']))})"
+                        f"({ui_theme.format_rupiah(int(item['price']) * int(item['qty']))})"
                     )
+                st.caption(
+                    f"Total: **{ui_theme.format_rupiah(int(order['total_price']))}** · {order['pickup_method']}"
+                )
                 if order["notes"]:
-                    st.info(f"**Catatan Pembeli:** {order['notes']}")
-                else:
-                    st.caption("Tidak ada catatan khusus dari pembeli.")
+                    st.markdown(
+                        f'<div class="gf-surface-note" style="margin-top:6px;">'
+                        f"<b>Catatan Pembeli:</b> {html.escape(order['notes'])}</div>",
+                        unsafe_allow_html=True,
+                    )
                 if (
                     order["status"] == db_service.STATUS_REJECTED
                     and order.get("rejection_reason")
                 ):
-                    st.error(
-                        f"**Alasan Penolakan:** {order['rejection_reason']}"
+                    st.markdown(
+                        f'<div class="gf-surface-note" style="margin-top:6px;">'
+                        f"<b>Alasan Penolakan:</b> {html.escape(order['rejection_reason'])}</div>",
+                        unsafe_allow_html=True,
                     )
 
             with right_col:
@@ -255,12 +264,12 @@ def _render_orders_tab(tenant: dict[str, Any]) -> None:
                 st.image(
                     order["payment_proof_bytes"],
                     caption=f"File: {order['payment_filename']}",
-                    width=260,
+                    width=240,
                 )
 
 
-def _render_menus_tab(tenant: dict[str, Any]) -> None:
-    """Merender Tab 2 Penjual: Tambah, edit, hapus, dan ubah stok menu."""
+def _render_menus_screen(tenant: dict[str, Any]) -> None:
+    """Merender layar Kelola Menu dengan foto makanan & upload foto oleh penjual."""
     with st.expander("Tambah Menu Baru", expanded=False):
         with st.form(f"add_menu_form_{tenant['id']}", clear_on_submit=True):
             c1, c2 = st.columns([2.2, 1.2])
@@ -277,15 +286,28 @@ def _render_menus_tab(tenant: dict[str, Any]) -> None:
                 "Deskripsi Singkat",
                 placeholder="Contoh: Ayam bakar bumbu madu + lalapan dan sambal.",
             )
+            new_photo = st.file_uploader(
+                "Foto Menu (PNG / JPG - Opsional)",
+                type=["png", "jpg", "jpeg"],
+                key=f"add_menu_photo_{tenant['id']}",
+            )
             new_avail = st.checkbox("Stok Tersedia", value=True)
             submitted = st.form_submit_button(
-                "💾 Simpan Menu Baru", type="primary", use_container_width=True
+                "Simpan Menu Baru", type="primary", use_container_width=True
             )
 
             if submitted:
                 if not new_name.strip():
                     st.error("Nama menu wajib diisi.")
                 else:
+                    image_data_uri = ""
+                    if new_photo is not None:
+                        img_bytes, img_name = db_service.encode_uploaded_file(
+                            new_photo
+                        )
+                        image_data_uri = db_service.bytes_to_base64_data_uri(
+                            img_bytes, img_name
+                        )
                     db_service.add_menu(
                         tenant_id=tenant["id"],
                         name=new_name,
@@ -293,32 +315,44 @@ def _render_menus_tab(tenant: dict[str, Any]) -> None:
                         description=new_desc,
                         emoji="",
                         is_available=new_avail,
+                        image_url=image_data_uri,
                     )
                     st.rerun()
 
-    st.divider()
     menus = db_service.get_menus_by_tenant(tenant["id"])
     if not menus:
-        st.info("Kios ini belum memiliki menu. Tambahkan menu baru di atas.")
+        st.markdown(
+            '<div class="gf-surface-note">Kios ini belum memiliki menu. Tambahkan menu baru di atas.</div>',
+            unsafe_allow_html=True,
+        )
         return
 
-    cols = st.columns(2)
+    cols = st.columns(min(3, len(menus)))
     for idx, menu in enumerate(menus):
-        with cols[idx % 2]:
+        in_stock = bool(menu["is_available"])
+        with cols[idx % len(cols)]:
             with st.container(border=True):
-                in_stock = bool(menu["is_available"])
-                stock_badge = "Tersedia" if in_stock else "Habis"
-
-                st.markdown(f"#### {menu['name']}")
-                st.caption(menu.get("description", ""))
                 st.markdown(
-                    f"**{buyer_view.format_rupiah(int(menu['price']))}** · {stock_badge}"
+                    ui_theme.render_media_html(
+                        menu.get("image_url", ""),
+                        menu["name"],
+                        dimmed=not in_stock,
+                        badge_text="TERSEDIA" if in_stock else "HABIS",
+                        badge_open=in_stock,
+                    ),
+                    unsafe_allow_html=True,
+                )
+                st.markdown(
+                    f'<p class="gf-title">{html.escape(menu["name"])}</p>'
+                    f'<p class="gf-desc">{html.escape(menu.get("description", ""))}</p>'
+                    f'<p class="gf-price">{ui_theme.format_rupiah(int(menu["price"]))}</p>',
+                    unsafe_allow_html=True,
                 )
 
                 btn_stock_col, btn_del_col = st.columns(2)
                 with btn_stock_col:
                     if st.button(
-                        "❌ Set Habis" if in_stock else "✅ Set Tersedia",
+                        "Set Habis" if in_stock else "Set Tersedia",
                         key=f"toggle_stock_{menu['id']}",
                         use_container_width=True,
                     ):
@@ -329,7 +363,7 @@ def _render_menus_tab(tenant: dict[str, Any]) -> None:
 
                 with btn_del_col:
                     if st.button(
-                        "🗑️ Hapus",
+                        "Hapus",
                         key=f"delete_menu_{menu['id']}",
                         use_container_width=True,
                     ):
@@ -348,6 +382,11 @@ def _render_menus_tab(tenant: dict[str, Any]) -> None:
                         edit_desc = st.text_area(
                             "Deskripsi", value=menu.get("description", "")
                         )
+                        edit_photo = st.file_uploader(
+                            "Ganti Foto Menu (Opsional)",
+                            type=["png", "jpg", "jpeg"],
+                            key=f"edit_photo_{menu['id']}",
+                        )
                         edit_avail = st.checkbox(
                             "Stok Tersedia", value=bool(menu["is_available"])
                         )
@@ -359,56 +398,133 @@ def _render_menus_tab(tenant: dict[str, Any]) -> None:
                             if not edit_name.strip():
                                 st.error("Nama menu tidak boleh kosong.")
                             else:
+                                new_img_uri: str | None = None
+                                if edit_photo is not None:
+                                    img_b, img_n = db_service.encode_uploaded_file(
+                                        edit_photo
+                                    )
+                                    new_img_uri = (
+                                        db_service.bytes_to_base64_data_uri(
+                                            img_b, img_n
+                                        )
+                                    )
                                 db_service.update_menu(
                                     menu_id=menu["id"],
                                     name=edit_name,
                                     price=int(edit_price),
                                     description=edit_desc,
-                                    emoji=menu.get("emoji", ""),
+                                    emoji="",
                                     is_available=edit_avail,
+                                    image_url=new_img_uri,
                                 )
                                 st.rerun()
 
 
+def _render_profile_screen(tenant: dict[str, Any]) -> None:
+    """Merender layar Profil Kios: unggah foto kios & lihat QRIS kios."""
+    c_photo, c_qris = st.columns([1.3, 1])
+    with c_photo:
+        with st.container(border=True):
+            st.markdown("#### Foto Kios Kantin")
+            st.caption(
+                "Foto ini tampil di halaman utama Etalase Kantin untuk pembeli."
+            )
+            st.markdown(
+                ui_theme.render_media_html(
+                    tenant.get("image_url", ""),
+                    tenant["name"],
+                    dimmed=not tenant["is_open"],
+                ),
+                unsafe_allow_html=True,
+            )
+            uploaded_kios_photo = st.file_uploader(
+                "Unggah Foto Kios Baru (PNG / JPG)",
+                type=["png", "jpg", "jpeg"],
+                key=f"upload_kios_photo_{tenant['id']}",
+            )
+            if st.button(
+                "Simpan Foto Kios",
+                type="primary",
+                disabled=uploaded_kios_photo is None,
+                use_container_width=True,
+            ):
+                db_service.update_tenant_image(
+                    tenant["id"],
+                    uploaded_kios_photo.getvalue(),
+                    uploaded_kios_photo.name,
+                )
+                st.rerun()
+
+    with c_qris:
+        with st.container(border=True):
+            st.markdown("#### QRIS Pembayaran Kios")
+            st.caption(f"NMID: `{tenant['nmid']}`")
+            st.image(tenant["qris_svg"], width=240)
+
+
 def render_seller_view(user: dict[str, Any]) -> None:
-    """Merender seluruh halaman MVP Role Penjual (Kios Kantin)."""
+    """Merender seluruh halaman Role Penjual dengan floating bottom navbar 1 baris."""
     tenant_id = user.get("tenant_id")
     tenant = db_service.get_tenant_by_id(tenant_id) if tenant_id else None
     if tenant is None:
         st.error("Data kios untuk akun penjual ini tidak ditemukan.")
         return
 
-    head_col, toggle_col = st.columns([3, 1.2])
-    with head_col:
-        status_badge = (
-            "**Kios Sedang Buka**"
-            if tenant["is_open"]
-            else "**Kios Sedang Tutup**"
-        )
-        st.markdown(f"### {tenant['name']}  |  {status_badge}")
-        st.caption(tenant["description"])
-    with toggle_col:
-        st.write("")
-        if st.button(
-            "🔴 Tutup Kios" if tenant["is_open"] else "🟢 Buka Kios",
-            key=f"seller_toggle_open_{tenant['id']}",
-            type="secondary" if tenant["is_open"] else "primary",
-            use_container_width=True,
-        ):
-            db_service.toggle_tenant_open(tenant["id"], not tenant["is_open"])
-            st.rerun()
+    if "seller_nav" not in st.session_state:
+        st.session_state["seller_nav"] = SELLER_NAV_ORDERS
+
+    with st.container(border=True):
+        h_left, h_right = st.columns([3, 1.1])
+        with h_left:
+            state_lbl = "BUKA" if tenant["is_open"] else "TUTUP"
+            b_cls = "gf-badge-open" if tenant["is_open"] else "gf-badge-closed"
+            st.markdown(
+                f'<span class="gf-badge {b_cls}">{state_lbl}</span> '
+                f'<span style="font-size:18px;font-weight:700;margin-left:8px;">'
+                f'{html.escape(tenant["name"])}</span>',
+                unsafe_allow_html=True,
+            )
+            st.caption(tenant.get("description", ""))
+        with h_right:
+            if st.button(
+                "Tutup Kios" if tenant["is_open"] else "Buka Kios",
+                key=f"seller_toggle_open_{tenant['id']}",
+                type="secondary" if tenant["is_open"] else "primary",
+                use_container_width=True,
+            ):
+                db_service.toggle_tenant_open(tenant["id"], not tenant["is_open"])
+                st.rerun()
 
     orders_count = len(db_service.get_tenant_orders(tenant["id"]))
     menus_count = len(db_service.get_menus_by_tenant(tenant["id"]))
 
-    tab_orders, tab_menus = st.tabs(
-        [
-            f"Dashboard Pesanan Masuk ({orders_count})",
-            f"Kelola Menu ({menus_count})",
-        ]
-    )
+    if st.session_state.get("seller_nav_synced") != st.session_state["seller_nav"]:
+        st.session_state["seller_bottom_nav_ctrl"] = st.session_state["seller_nav"]
+        st.session_state["seller_nav_synced"] = st.session_state["seller_nav"]
 
-    with tab_orders:
-        _render_orders_tab(tenant)
-    with tab_menus:
-        _render_menus_tab(tenant)
+    nav_labels = {
+        SELLER_NAV_ORDERS: f"Pesanan ({orders_count})" if orders_count else "Pesanan",
+        SELLER_NAV_MENUS: f"Kelola Menu ({menus_count})",
+        SELLER_NAV_PROFILE: "Profil Kios",
+    }
+
+    with st.container(key="bottom_nav"):
+        st.segmented_control(
+            "Navigasi Penjual",
+            options=[SELLER_NAV_ORDERS, SELLER_NAV_MENUS, SELLER_NAV_PROFILE],
+            format_func=lambda k: nav_labels[k],
+            required=True,
+            wrap=False,
+            label_visibility="collapsed",
+            width="stretch",
+            key="seller_bottom_nav_ctrl",
+            on_change=_on_seller_nav_change,
+        )
+
+    active = st.session_state["seller_nav"]
+    if active == SELLER_NAV_ORDERS:
+        _render_orders_screen(tenant)
+    elif active == SELLER_NAV_MENUS:
+        _render_menus_screen(tenant)
+    else:
+        _render_profile_screen(tenant)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 from typing import Any
 
 import streamlit as st
@@ -10,6 +11,7 @@ import auth_service
 import buyer_view
 import db_service
 import seller_view
+import ui_theme
 
 
 def _default_demo_buyer() -> dict[str, Any]:
@@ -60,6 +62,16 @@ def _set_seller_session(tenant: dict[str, Any]) -> None:
     st.session_state["sso_auth_error"] = ""
 
 
+def _logout_user() -> None:
+    """Membersihkan sesi login saat pengguna keluar."""
+    st.session_state["user"] = None
+    st.session_state["cart"] = {"tenant_id": None, "items": {}}
+    st.session_state["active_storefront_tenant_id"] = None
+    st.session_state["seller_pending_action"] = None
+    st.session_state["buyer_nav"] = buyer_view.NAV_STOREFRONT
+    st.session_state["seller_nav"] = seller_view.SELLER_NAV_ORDERS
+
+
 def _handle_sso_callback_hook() -> None:
     """Memvalidasi callback tiket CAS 2.0 dari SSO UI (`?ticket=ST-...`)."""
     if "ticket" in st.query_params and st.session_state["user"] is None:
@@ -84,29 +96,27 @@ def _handle_sso_callback_hook() -> None:
 
 def _render_buyer_login_tab() -> None:
     """Merender form login Pembeli: SSO UI CAS 2.0 + Akun Cadangan NPM & Password."""
-    st.subheader("Masuk sebagai Mahasiswa")
     sso_err = st.session_state.get("sso_auth_error", "")
     if sso_err:
-        st.error(f"Login SSO UI gagal ({sso_err}). Gunakan akun NPM & Password di bawah jika domain belum di-whitelist.")
+        st.error(
+            f"Login SSO UI gagal ({sso_err}). Gunakan akun NPM & Password di bawah."
+        )
 
     st.link_button(
-        "🎓 Masuk dengan SSO UI",
+        "Masuk dengan SSO UI",
         auth_service.build_sso_login_url(),
         type="primary",
         use_container_width=True,
     )
-    st.caption(
-        "Autentikasi resmi mahasiswa via protokol CAS 2.0 (sso.ui.ac.id/cas2)."
-    )
+    st.caption("Autentikasi resmi mahasiswa via sso.ui.ac.id/cas2.")
 
     st.divider()
-    st.caption("Atau masuk / daftar menggunakan akun GoFood Kancil:")
-
     buyer_mode = st.segmented_control(
         "Mode Akun Mahasiswa",
         options=["Masuk Akun", "Daftar Akun"],
         default="Masuk Akun",
         required=True,
+        wrap=False,
         label_visibility="collapsed",
         width="stretch",
         key="buyer_auth_mode",
@@ -122,7 +132,7 @@ def _render_buyer_login_tab() -> None:
                 placeholder="Minimal 4 karakter",
             )
             reg_submitted = st.form_submit_button(
-                "📝 Daftar & Masuk", type="primary", use_container_width=True
+                "Daftar & Masuk", type="primary", use_container_width=True
             )
 
         if reg_submitted:
@@ -141,21 +151,21 @@ def _render_buyer_login_tab() -> None:
                 placeholder="Masukkan password akunmu",
             )
             login_submitted = st.form_submit_button(
-                "🔑 Masuk ke Kantin", type="primary", use_container_width=True
+                "Masuk ke Kantin", type="primary", use_container_width=True
             )
 
         if login_submitted:
             buyer = db_service.authenticate_buyer(login_npm, login_pw)
             if buyer is None:
                 st.error(
-                    "NPM atau password tidak ditemukan. Silakan pilih Daftar Akun terlebih dahulu."
+                    "NPM atau password tidak cocok. Silakan pilih Daftar Akun terlebih dahulu."
                 )
             else:
                 _set_buyer_session(buyer)
                 st.rerun()
 
     st.divider()
-    if st.button("⚡ Login Cepat Pembeli (Demo)", use_container_width=True):
+    if st.button("Login Cepat Pembeli (Demo)", use_container_width=True):
         _set_buyer_session(_default_demo_buyer())
         st.rerun()
 
@@ -164,14 +174,13 @@ def _render_seller_login_tab(
     tenants: list[dict[str, Any]], tenant_map: dict[str, dict[str, Any]]
 ) -> None:
     """Merender form login Penjual berbasis Nama Kios + Password."""
-    st.subheader("Masuk sebagai Pengelola Kios")
     if not tenants:
         st.warning("Belum ada data kios.")
         return
 
     tenant_names = ", ".join(t["name"] for t in tenants)
     st.caption(
-        f"Masukkan Nama Kios dan Password. Kios terdaftar: {tenant_names} "
+        f"Kios terdaftar: {tenant_names} "
         f"(Password demo awal: `{db_service.DEFAULT_SELLER_PASSWORD}`)."
     )
     with st.form("seller_login_form"):
@@ -185,7 +194,7 @@ def _render_seller_login_tab(
             placeholder="Masukkan password kios",
         )
         seller_submit = st.form_submit_button(
-            "🔑 Masuk sebagai Penjual",
+            "Masuk Dashboard Kios",
             type="primary",
             use_container_width=True,
         )
@@ -208,7 +217,7 @@ def _render_seller_login_tab(
         key="quick_seller_tenant_select",
     )
     if st.button(
-        "⚡ Login Cepat Penjual (Kios Terpilih)",
+        "Login Cepat Penjual (Kios Terpilih)",
         use_container_width=True,
     ):
         _set_seller_session(tenant_map[quick_tid])
@@ -216,50 +225,64 @@ def _render_seller_login_tab(
 
 
 def _render_login_page() -> None:
-    """Merender halaman login 2 role (Pembeli Mahasiswa & Penjual Kios Kantin)."""
-    st.title("GoFood Kancil — Queue Kantin Online")
-    st.caption("Pesan makanan & minuman kantin satu fakultas tanpa antre lama.")
-
+    """Merender halaman masuk terpusat minimalis bergaya putih-abu."""
     tenants = db_service.get_tenants()
     tenant_map = {t["id"]: t for t in tenants}
+    db_mode = db_service.get_db_backend_mode()
+    db_label = (
+        "Firebase Cloud Firestore"
+        if db_mode == "firebase"
+        else "Memori Lokal (Fallback)"
+    )
 
-    col_left, col_right = st.columns([1.35, 1])
-    with col_left:
+    _, center_col, _ = st.columns([1, 1.45, 1])
+    with center_col:
         with st.container(border=True):
+            st.markdown(
+                "<h3 style='margin-bottom:2px;font-weight:700;letter-spacing:-0.02em;'>GoFood Kancil</h3>"
+                "<p style='color:#71717A;font-size:13.5px;margin-bottom:14px;'>"
+                "Pesan makanan kantin fakultas tanpa antre.</p>",
+                unsafe_allow_html=True,
+            )
             tab_buyer_login, tab_seller_login = st.tabs(
-                ["Pembeli (Mahasiswa)", "Penjual (Kios Kantin)"]
+                ["Mahasiswa", "Pengelola Kios"]
             )
             with tab_buyer_login:
                 _render_buyer_login_tab()
             with tab_seller_login:
                 _render_seller_login_tab(tenants, tenant_map)
 
-    with col_right:
-        with st.container(border=True):
-            st.markdown("#### Alur GoFood Kancil")
-            st.markdown(
-                "**Untuk Mahasiswa (Pembeli):**\n"
-                "1. Masuk via **SSO UI** atau akun NPM & Password.\n"
-                "2. Pilih kios & menu di **Etalase Kantin**.\n"
-                "3. Scan **QRIS khusus kios** & upload bukti pembayaran (`0%`).\n"
-                "4. Pantau **Live Queue** (`0% → 50% → 100%`) & ambil di konter kios.\n\n"
-                "**Untuk Penjual Kios:**\n"
-                "1. Masuk menggunakan **Nama Kios + Password**.\n"
-                "2. Kelola menu, harga, stok, & status **Buka/Tutup** kios.\n"
-                "3. Cek bukti QRIS lalu **Konfirmasi / Tolak** pembayaran (konfirmasi ganda).\n"
-                "4. Tandai **Pesanan Sudah Bisa Diambil** setelah selesai disiapkan."
-            )
-            db_mode = db_service.get_db_backend_mode()
-            db_text = (
-                "Firebase Cloud Firestore (Aktif)"
-                if db_mode == "firebase"
-                else "Memori Lokal (Fallback — taruh serviceAccountKey.json untuk Cloud)"
-            )
-            st.caption(f"Status Database: **{db_text}**")
+            st.caption(f"Database: **{db_label}**")
+
+
+def _render_top_header(user: dict[str, Any]) -> None:
+    """Merender header minimalis di atas halaman agar navigasi keluar mudah di HP."""
+    tenants = {t["id"]: t for t in db_service.get_tenants()}
+    if user["role"] == "seller":
+        t_name = tenants.get(user.get("tenant_id", ""), {}).get(
+            "name", "Dashboard Penjual"
+        )
+        subtitle = f"Penjual · {t_name}"
+    else:
+        subtitle = f"{user['name']} · {user['npm']}"
+
+    h_brand, h_logout = st.columns([3.4, 0.9])
+    with h_brand:
+        st.markdown(
+            "<div style='padding-bottom:6px;'>"
+            "<span style='font-size:22px;font-weight:700;letter-spacing:-0.025em;'>GoFood Kancil</span>"
+            f"<span style='font-size:13px;color:#71717A;margin-left:10px;'>{html.escape(subtitle)}</span>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+    with h_logout:
+        if st.button("Keluar", key="top_logout_btn", use_container_width=True):
+            _logout_user()
+            st.rerun()
 
 
 def _render_sidebar(user: dict[str, Any]) -> None:
-    """Merender sidebar profil, status database, ringkasan, dan pindah role demo."""
+    """Merender sidebar profil, status database, dan pindah role cepat untuk demo."""
     tenants = db_service.get_tenants()
     tenant_map = {t["id"]: t for t in tenants}
     db_mode = db_service.get_db_backend_mode()
@@ -279,36 +302,12 @@ def _render_sidebar(user: dict[str, Any]) -> None:
             st.markdown("### Profil Pembeli")
             st.markdown(f"**Nama:** {user['name']}")
             st.markdown(f"**NPM:** `{user['npm']}`")
-            if st.button("🚪 Keluar (Logout)", use_container_width=True):
-                st.session_state["user"] = None
-                st.session_state["cart"] = {"tenant_id": None, "items": {}}
-                st.session_state["active_storefront_tenant_id"] = None
-                st.session_state["seller_pending_action"] = None
+            if st.button("Keluar (Logout)", key="sidebar_logout_btn", use_container_width=True):
+                _logout_user()
                 st.rerun()
 
             st.divider()
-            cart = st.session_state["cart"]
-            cart_qty = sum(int(item["qty"]) for item in cart["items"].values())
-            cart_total = sum(
-                int(item["price"]) * int(item["qty"])
-                for item in cart["items"].values()
-            )
-            st.markdown("### Ringkasan Keranjang")
-            if cart_qty > 0 and cart["tenant_id"]:
-                active_tenant = tenant_map.get(cart["tenant_id"])
-                tenant_name = active_tenant["name"] if active_tenant else "-"
-                st.caption(f"Kios: **{tenant_name}**")
-                st.write(
-                    f"{cart_qty} item · **{buyer_view.format_rupiah(cart_total)}**"
-                )
-            else:
-                st.caption("Keranjang masih kosong.")
-
-            st.divider()
             st.markdown("### Pindah Role (Demo)")
-            st.caption(
-                "Beralih ke tampilan Penjual untuk memproses pesanan yang baru kamu buat."
-            )
             if tenants:
                 target_tid = st.selectbox(
                     "Pilih Dashboard Kios:",
@@ -317,13 +316,12 @@ def _render_sidebar(user: dict[str, Any]) -> None:
                     key="sidebar_switch_seller_tid",
                 )
                 if st.button(
-                    "🍳 Masuk ke Mode Penjual",
+                    "Masuk ke Mode Penjual",
                     key="switch_to_seller_btn",
                     use_container_width=True,
                 ):
                     _set_seller_session(tenant_map[target_tid])
                     st.rerun()
-
         else:
             current_tenant = tenant_map.get(user.get("tenant_id", ""))
             st.markdown("### Profil Penjual")
@@ -331,9 +329,8 @@ def _render_sidebar(user: dict[str, Any]) -> None:
                 status_text = "Buka" if current_tenant["is_open"] else "Tutup"
                 st.markdown(f"**Kios:** {current_tenant['name']}")
                 st.markdown(f"**Status:** {status_text}")
-            if st.button("🚪 Keluar (Logout)", use_container_width=True):
-                st.session_state["user"] = None
-                st.session_state["seller_pending_action"] = None
+            if st.button("Keluar (Logout)", key="sidebar_seller_logout_btn", use_container_width=True):
+                _logout_user()
                 st.rerun()
 
             st.divider()
@@ -355,7 +352,7 @@ def _render_sidebar(user: dict[str, Any]) -> None:
                     key="sidebar_seller_tenant_switch",
                 )
                 if st.button(
-                    "🔁 Buka Dashboard Kios Ini",
+                    "Buka Dashboard Kios Ini",
                     key="switch_seller_tenant_btn",
                     use_container_width=True,
                 ):
@@ -365,7 +362,7 @@ def _render_sidebar(user: dict[str, Any]) -> None:
             st.divider()
             st.markdown("### Pindah Role (Demo)")
             if st.button(
-                "🎓 Kembali ke Mode Pembeli (Demo)",
+                "Kembali ke Mode Pembeli (Demo)",
                 key="switch_to_buyer_btn",
                 use_container_width=True,
             ):
@@ -380,9 +377,11 @@ def _render_sidebar(user: dict[str, Any]) -> None:
 def main() -> None:
     """Menjalankan aplikasi utama GoFood Kancil."""
     st.set_page_config(
-        page_title="GoFood Kancil - Queue Kantin Online",
+        page_title="GoFood Kancil",
         layout="wide",
+        initial_sidebar_state="collapsed",
     )
+    ui_theme.inject_minimalist_css()
     _init_session_state()
     _handle_sso_callback_hook()
 
@@ -392,11 +391,10 @@ def main() -> None:
         return
 
     _render_sidebar(user)
+    _render_top_header(user)
     if user["role"] == "seller":
-        st.title("GoFood Kancil — Dashboard Penjual")
         seller_view.render_seller_view(user)
     else:
-        st.title("GoFood Kancil — Kantin Fakultas")
         buyer_view.render_buyer_view(user)
 
 
