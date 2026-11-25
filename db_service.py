@@ -49,6 +49,7 @@ _FALLBACK_STORE: dict[str, Any] = {}
 _FIRESTORE_CLIENT_SINGLETON: Any = None
 _FIRESTORE_CHECKED: bool = False
 _FIRESTORE_SEEDED: bool = False
+_FIRESTORE_LAST_ERROR: str = ""
 
 
 def _is_streamlit_active() -> bool:
@@ -72,39 +73,48 @@ def _get_store() -> Any:
 
 def _load_firebase_credentials_dict() -> dict[str, Any] | None:
     """Membaca kredensial Service Account dari file lokal atau ``st.secrets``."""
+    global _FIRESTORE_LAST_ERROR
+
     if SERVICE_ACCOUNT_PATH.is_file():
         try:
             raw = json.loads(SERVICE_ACCOUNT_PATH.read_text(encoding="utf-8"))
             private_key = str(raw.get("private_key", ""))
             if private_key and "YOUR_PRIVATE_KEY" not in private_key:
                 return raw
-        except Exception:
-            pass
+        except Exception as exc:
+            _FIRESTORE_LAST_ERROR = f"File serviceAccountKey.json tidak valid: {exc}"
 
-    if _is_streamlit_active():
-        try:
-            import streamlit as st
+    try:
+        import streamlit as st
 
-            if "firebase" in st.secrets:
-                fb_sec = st.secrets["firebase"]
-                if isinstance(fb_sec, Mapping):
-                    cred_dict = dict(fb_sec)
-                    if "private_key" in cred_dict:
-                        cred_dict["private_key"] = str(
-                            cred_dict["private_key"]
-                        ).replace("\\n", "\n")
-                    if "YOUR_PRIVATE_KEY" not in str(
-                        cred_dict.get("private_key", "")
-                    ):
-                        return cred_dict
-        except Exception:
-            pass
+        if "firebase" in st.secrets:
+            fb_sec = st.secrets["firebase"]
+            cred_dict = (
+                dict(fb_sec)
+                if isinstance(fb_sec, Mapping)
+                else {k: fb_sec[k] for k in fb_sec.keys()}
+            )
+            if "private_key" in cred_dict:
+                cred_dict["private_key"] = str(
+                    cred_dict["private_key"]
+                ).replace("\\n", "\n")
+            if "YOUR_PRIVATE_KEY" not in str(
+                cred_dict.get("private_key", "")
+            ):
+                return cred_dict
+            _FIRESTORE_LAST_ERROR = "Secrets [firebase] masih berisi template placeholder."
+        else:
+            _FIRESTORE_LAST_ERROR = "Blok [firebase] belum ada di Streamlit Secrets."
+    except Exception as exc:
+        if not _FIRESTORE_LAST_ERROR:
+            _FIRESTORE_LAST_ERROR = f"Secrets tidak terbaca: {exc}"
 
     return None
 
 
 def _create_firestore_client() -> Any | None:
     """Menginisialisasi objek client Firebase Cloud Firestore satu kali."""
+    global _FIRESTORE_LAST_ERROR
     cred_dict = _load_firebase_credentials_dict()
     if cred_dict is None:
         return None
@@ -116,8 +126,10 @@ def _create_firestore_client() -> Any | None:
         if not firebase_admin._apps:
             cred = credentials.Certificate(cred_dict)
             firebase_admin.initialize_app(cred)
+        _FIRESTORE_LAST_ERROR = ""
         return firestore.client()
-    except Exception:
+    except Exception as exc:
+        _FIRESTORE_LAST_ERROR = f"Gagal inisialisasi Firebase: {exc}"
         return None
 
 
@@ -125,19 +137,22 @@ def get_firestore_client() -> Any | None:
     """Mengambil instance client Firestore (singleton), atau ``None`` jika mode lokal."""
     global _FIRESTORE_CLIENT_SINGLETON, _FIRESTORE_CHECKED
 
-    if _is_streamlit_active():
-        import streamlit as st
+    if _FIRESTORE_CLIENT_SINGLETON is not None:
+        return _FIRESTORE_CLIENT_SINGLETON
 
-        @st.cache_resource(show_spinner=False)
-        def _cached_client() -> Any | None:
-            return _create_firestore_client()
-
-        return _cached_client()
-
-    if not _FIRESTORE_CHECKED:
-        _FIRESTORE_CLIENT_SINGLETON = _create_firestore_client()
+    client = _create_firestore_client()
+    if client is not None:
+        _FIRESTORE_CLIENT_SINGLETON = client
         _FIRESTORE_CHECKED = True
-    return _FIRESTORE_CLIENT_SINGLETON
+        return client
+
+    _FIRESTORE_CHECKED = True
+    return None
+
+
+def get_db_status_detail() -> str:
+    """Mengembalikan keterangan singkat penyebab fallback jika belum terhubung ke Firebase."""
+    return _FIRESTORE_LAST_ERROR
 
 
 def get_db_backend_mode() -> str:

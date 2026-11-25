@@ -269,6 +269,10 @@ def _render_sidebar(user: dict[str, Any]) -> None:
     with st.sidebar:
         st.markdown("## Pesan Kancil")
         st.caption(f"Database: **{db_label}**")
+        if db_mode != "firebase":
+            detail = db_service.get_db_status_detail()
+            if detail:
+                st.caption(detail)
         st.divider()
 
         if user["role"] == "buyer":
