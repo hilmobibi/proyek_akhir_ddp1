@@ -3,9 +3,9 @@
 Aplikasi pemesanan dan antrean kantin fakultas berbasis **Python (Streamlit)** dengan database **Firebase Cloud Firestore** dan autentikasi **SSO UI (CAS 2.0)**.
 
 ### Anggota Kelompok
-- Azzam
-- Hilmo
-- Rasya Haekal Jasilva (npm : 2606860044)
+- Azzam Aryasatya (NPM : 2606859686)
+- Hilmotomo Abdillah (NPM : 2606807064)
+- Rasya Haekal Jasilva (NPM : 2606860044)
 
 ---
 
